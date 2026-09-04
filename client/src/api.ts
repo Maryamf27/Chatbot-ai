@@ -1,5 +1,16 @@
 import type { ChatMessage } from "./types";
 
+const configuredApiUrl = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
+const apiPrefix = configuredApiUrl
+  ? configuredApiUrl.endsWith("/api")
+    ? configuredApiUrl
+    : `${configuredApiUrl}/api`
+  : "/api";
+
+function apiUrl(path: string): string {
+  return `${apiPrefix}/${path}`;
+}
+
 type MessagePayload = {
   role: ChatMessage["role"];
   content:
@@ -30,7 +41,7 @@ export async function fetchHealth(
   signal?: AbortSignal
 ): Promise<HealthStatus> {
   try {
-    const response = await fetch("/api/health", { signal });
+    const response = await fetch(apiUrl("health"), { signal });
     if (!response.ok) {
       return { ok: false, model: "unknown", apiKeyConfigured: false };
     }
@@ -69,7 +80,7 @@ export async function streamChat(
 
   let response: Response;
   try {
-    response = await fetch("/api/chat", {
+    response = await fetch(apiUrl("chat"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -82,7 +93,7 @@ export async function streamChat(
       throw new Error(msg);
     }
     const msg =
-      "Unable to reach the server. Make sure the backend is running on port 3001.";
+      "Unable to reach the backend. Check the deployed API URL and make sure the server is running.";
     onError?.(msg);
     throw new Error(msg);
   }

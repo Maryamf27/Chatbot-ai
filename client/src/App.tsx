@@ -761,11 +761,10 @@ export default function App() {
               ☰
             </button>
             <div className="brand">
-              <img className="logo" src="/favicon.png" alt="Gemma" />
               <div>
-                <h1>Gemma 4 26B</h1>
+                <h1>Minimax M3</h1>
                 <p>
-                  Google · multimodal · free
+                   · multimodal · free
                   {health ? (
                     <span className={`badge ${serverOk && keyOk ? "ok" : "warn"}`}>
                       {serverOk
