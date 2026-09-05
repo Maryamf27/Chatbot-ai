@@ -1,4 +1,4 @@
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ModelId } from "./types";
 
 const configuredApiUrl = (import.meta.env.VITE_API_URL ?? "").replace(/\/+$/, "");
 const apiPrefix = configuredApiUrl
@@ -22,6 +22,7 @@ type MessagePayload = {
 };
 
 type ChatPayload = {
+  model: ModelId;
   messages: MessagePayload[];
 };
 
@@ -31,10 +32,19 @@ export type HealthStatus = {
   apiKeyConfigured: boolean;
 };
 
+/** Returned by streamChat when the server responds with a Flash audio message. */
+export type AudioResponse = {
+  dataUri: string;  // "data:audio/mpeg;base64,..."
+  format: string;   // "mp3" | "pcm"
+  prompt: string;   // the text that was converted to speech
+};
+
 export type StreamHandlers = {
   onDelta?: (chunk: string) => void;
   onError?: (message: string) => void;
   onDone?: (full: string) => void;
+  /** Called instead of onDone when the response is a Flash audio message. */
+  onAudio?: (audio: AudioResponse) => void;
 };
 
 export async function fetchHealth(
@@ -76,7 +86,7 @@ export async function streamChat(
   handlers: StreamHandlers = {},
   signal?: AbortSignal
 ): Promise<string> {
-  const { onDelta, onError, onDone } = handlers;
+  const { onDelta, onError, onDone, onAudio } = handlers;
 
   let response: Response;
   try {
@@ -116,12 +126,36 @@ export async function streamChat(
     contentType.includes("application/json") &&
     !contentType.includes("x-ndjson")
   ) {
-    const data = (await response.json()) as { reply?: string; error?: string };
+    const data = (await response.json()) as {
+      reply?: string;
+      error?: string;
+      type?: string;
+      format?: string;
+      data?: string;
+      prompt?: string;
+    };
+
+    // Flash audio response
+    if (data.type === "audio" && typeof data.data === "string") {
+      const mimeType = data.format === "mp3" ? "audio/mpeg" : "audio/wav";
+      const dataUri = `data:${mimeType};base64,${data.data}`;
+      const audio: AudioResponse = {
+        dataUri,
+        format: data.format ?? "mp3",
+        prompt: data.prompt ?? "",
+      };
+      onAudio?.(audio);
+      // Return the prompt as the text content so nonce/abort logic still works
+      return data.prompt ?? "";
+    }
+
+    // Standard text reply
     if (typeof data.reply === "string") {
       onDelta?.(data.reply);
       onDone?.(data.reply);
       return data.reply;
     }
+
     const msg = data.error ?? "Empty chat response";
     onError?.(msg);
     throw new Error(msg);

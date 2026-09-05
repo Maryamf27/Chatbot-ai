@@ -33,6 +33,13 @@ export function speakText(text: string): Promise<void> {
   });
 }
 
+/** Stop any browser text-to-speech currently in progress. */
+export function stopSpeaking(): void {
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 export function listenOnce(): Promise<string> {
   const Ctor = recognitionCtor();
   if (!Ctor) {

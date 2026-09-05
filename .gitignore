@@ -6,3 +6,4 @@ dist
 uploads
 client/dist
 server/dist
+.trae/

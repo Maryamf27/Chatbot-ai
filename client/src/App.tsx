@@ -5,9 +5,14 @@ import {
   streamChat,
   buildPayloadMessages,
   type HealthStatus,
+  type AudioResponse,
 } from "./api";
-import { listenOnce, speakText } from "./speech";
-import type { ChatMessage, Conversation } from "./types";
+import { listenOnce, speakText, stopSpeaking } from "./speech";
+import type { ChatMessage, Conversation, ModelId, MessageType } from "./types";
+import { getModelById, DEFAULT_MODEL_ID } from "./config/models";
+import { ModelSelector } from "./components/ModelSelector";
+import { ImageMessage } from "./components/ImageMessage";
+import { AudioMessage } from "./components/AudioMessage";
 
 const STORE_KEY = "ling-store:v2";
 const PREFS_KEY = "ling-prefs:v1";
@@ -28,7 +33,32 @@ function validMessage(m: unknown): m is ChatMessage {
     msg.images === undefined ||
     (Array.isArray(msg.images) &&
       (msg.images as unknown[]).every((s) => typeof s === "string"));
-  return Boolean(roleOk && idOk && contentOk && imagesOk);
+  const typeOk =
+    msg.type === undefined ||
+    msg.type === "text" ||
+    msg.type === "image" ||
+    msg.type === "audio";
+  const modelOk =
+    msg.model === undefined ||
+    msg.model === "text" ||
+    msg.model === "flash" ||
+    msg.model === "image";
+  const imageUrlOk =
+    msg.imageUrl === undefined || typeof msg.imageUrl === "string";
+  const audioUrlOk =
+    msg.audioUrl === undefined || typeof msg.audioUrl === "string";
+  const promptOk = msg.prompt === undefined || typeof msg.prompt === "string";
+  return Boolean(
+    roleOk &&
+      idOk &&
+      contentOk &&
+      imagesOk &&
+      typeOk &&
+      modelOk &&
+      imageUrlOk &&
+      audioUrlOk &&
+      promptOk
+  );
 }
 
 function validConversation(c: unknown): c is Conversation {
@@ -44,21 +74,12 @@ function validConversation(c: unknown): c is Conversation {
   );
 }
 
-function makeWelcomeMessage(): ChatMessage {
-  return {
-    id: uid(),
-    role: "assistant",
-    content:
-      "Hi — I am **MiniMax M3**, a multimodal AI assistant. Send me a message, upload or paste an image, or tap the mic to talk. I can see images, understand text, and answer with nicely formatted headings, code blocks, and lists.",
-  };
-}
-
 function makeConversation(overrideTitle?: string): Conversation {
   const now = Date.now();
   return {
     id: uid(),
     title: overrideTitle ?? "New chat",
-    messages: [makeWelcomeMessage()],
+    messages: [],
     createdAt: now,
     updatedAt: now,
   };
@@ -135,7 +156,18 @@ function loadStore(): StoreShape {
           ? parsed.activeId
           : parsed.conversations[0]?.id ?? null;
       if (parsed.conversations.length === 0) return defaultStore();
-      return { conversations: parsed.conversations, activeId };
+      // Remove the old, persistent welcome bubble from saved conversations.
+      const conversations = parsed.conversations.map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.filter(
+          (message) =>
+            !(
+              message.role === "assistant" &&
+              message.content.includes("I am a multimodal AI assistant")
+            )
+        ),
+      }));
+      return { conversations, activeId };
     }
     return defaultStore();
   } catch {
@@ -146,9 +178,20 @@ function loadStore(): StoreShape {
 function saveStore(store: StoreShape) {
   try {
     if (typeof localStorage === "undefined") return;
-    let json = JSON.stringify(store);
+    // Strip audioUrl (base64 data URIs) before saving — they are transient.
+    // AudioMessage shows "expired" state on reload, prompting the user to resend.
+    const stripped: StoreShape = {
+      ...store,
+      conversations: store.conversations.map((c) => ({
+        ...c,
+        messages: c.messages.map((m) =>
+          m.audioUrl ? { ...m, audioUrl: undefined } : m
+        ),
+      })),
+    };
+    let json = JSON.stringify(stripped);
     if (new Blob([json]).size > MAX_TOTAL_BYTES) {
-      const trimmed: Conversation[] = [...store.conversations]
+      const trimmed: Conversation[] = [...stripped.conversations]
         .sort((a, b) => b.updatedAt - a.updatedAt)
         .slice(0, 20)
         .map((c) => ({
@@ -201,7 +244,7 @@ function formatDay(ts: number): string {
   if (ts >= startOfToday) return "Today";
   if (ts >= startOfYesterday) return "Yesterday";
   const diffDays = Math.floor((startOfToday - ts) / 86400000);
-  if (diffDays < 7) return `${diffDays} days ago`;
+  if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? "" : "s"} ago`;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
@@ -217,10 +260,12 @@ function fileToDataUrl(file: File): Promise<string> {
 export default function App() {
   const [store, setStore] = useState<StoreShape>(() => loadStore());
   const [input, setInput] = useState("");
+  const [selectedModel, setSelectedModel] = useState<ModelId>(DEFAULT_MODEL_ID);
   const [busy, setBusy] = useState(false);
   const [streamingId, setStreamingId] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [speakReplies, setSpeakReplies] = useState<boolean>(() => loadSpeakPref());
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -234,6 +279,7 @@ export default function App() {
   const healthAbortRef = useRef<AbortController | null>(null);
   const submitNonceRef = useRef<number>(0);
   const submitRunningRef = useRef<boolean>(false);
+  const speechNonceRef = useRef<number>(0);
 
   const conversations = store.conversations;
   const activeId = store.activeId;
@@ -265,6 +311,20 @@ export default function App() {
     if (silent) {
       /* caller handles UI cleanup */
     }
+  }
+
+  function stopReplySpeech() {
+    speechNonceRef.current += 1;
+    stopSpeaking();
+    setIsSpeaking(false);
+  }
+
+  function playReplySpeech(text: string) {
+    const nonce = ++speechNonceRef.current;
+    setIsSpeaking(true);
+    void speakText(text).finally(() => {
+      if (nonce === speechNonceRef.current) setIsSpeaking(false);
+    });
   }
 
   useEffect(() => {
@@ -393,6 +453,32 @@ export default function App() {
     });
   }
 
+  /**
+   * Finalises a Flash audio message.
+   * Stores the prompt text as content (for localStorage) and the data URI
+   * as audioUrl (in-memory only — stripped from localStorage by saveStore).
+   */
+  function finalizeAudioMessage(msgId: string, audio: AudioResponse) {
+    setStore((prev) => {
+      if (!prev.activeId) return prev;
+      return {
+        ...prev,
+        conversations: prev.conversations.map((c) =>
+          c.id === prev.activeId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === msgId
+                    ? { ...m, content: audio.prompt, audioUrl: audio.dataUri, prompt: audio.prompt }
+                    : m
+                ),
+              }
+            : c
+        ),
+      };
+    });
+  }
+
   function removePendingImage(idx: number) {
     setPendingImages((prev) => prev.filter((_, i) => i !== idx));
   }
@@ -443,6 +529,7 @@ export default function App() {
 
   function createNewChat() {
     abortChat();
+    stopReplySpeech();
     const convo = makeConversation();
     setStore((prev) => ({
       conversations: [convo, ...prev.conversations],
@@ -454,7 +541,10 @@ export default function App() {
   }
 
   function switchConversation(id: string) {
-    if (id !== activeId) abortChat();
+    if (id !== activeId) {
+      abortChat();
+      stopReplySpeech();
+    }
     setStore((prev) => ({ ...prev, activeId: id }));
     setError(null);
     setSidebarOpen(false);
@@ -464,7 +554,10 @@ export default function App() {
   function deleteConversation(id: string, ev?: React.MouseEvent) {
     ev?.stopPropagation();
     if (!window.confirm("Delete this chat?")) return;
-    if (id === activeId) abortChat();
+    if (id === activeId) {
+      abortChat();
+      stopReplySpeech();
+    }
     setStore((prev) => {
       const remaining = prev.conversations.filter((c) => c.id !== id);
       if (remaining.length === 0) {
@@ -482,12 +575,17 @@ export default function App() {
   function clearActiveMessages() {
     if (!window.confirm("Clear messages in this chat?")) return;
     abortChat();
-    updateActive((c) => ({ ...c, messages: [makeWelcomeMessage()] }), true);
+    stopReplySpeech();
+    updateActive((c) => ({ ...c, messages: [] }), true);
     setError(null);
     setPendingImages([]);
   }
 
-  async function submit(text: string, imagesToSend: string[] = []) {
+  async function submit(
+    text: string,
+    imagesToSend: string[] = [],
+    modelId: ModelId = selectedModel
+  ) {
     const trimmed = text.trim();
     if ((!trimmed && imagesToSend.length === 0) || busy || !active) return;
 
@@ -496,11 +594,18 @@ export default function App() {
     const nonce = ++submitNonceRef.current;
 
     abortChat();
+    stopReplySpeech();
 
     setError(null);
+
+    const userMsgType: MessageType =
+      modelId === "image" ? "text" : modelId === "flash" ? "text" : "text";
+
     const userMessage: ChatMessage = {
       id: uid(),
       role: "user",
+      type: userMsgType,
+      model: modelId,
       content: trimmed || (imagesToSend.length > 0 ? "(see attached image)" : ""),
       images: imagesToSend.length > 0 ? imagesToSend : undefined,
     };
@@ -509,6 +614,8 @@ export default function App() {
     const assistantSeed: ChatMessage = {
       id: assistantStreamId,
       role: "assistant",
+      type: modelId === "image" ? "image" : modelId === "flash" ? "audio" : "text",
+      model: modelId,
       content: "",
     };
 
@@ -539,6 +646,7 @@ export default function App() {
     chatAbortRef.current = controller;
 
     let deltaArrived = false;
+    let audioArrived = false;
 
     try {
       const payloadMessages = buildPayloadMessages(
@@ -552,27 +660,33 @@ export default function App() {
       );
 
       const reply = await streamChat(
-        { messages: payloadMessages },
+        { model: modelId, messages: payloadMessages },
         {
           onDelta: (chunk) => {
             if (nonce !== submitNonceRef.current) return;
             deltaArrived = true;
             appendDeltaToMessage(assistantStreamId, chunk);
           },
+          onAudio: (audio) => {
+            if (nonce !== submitNonceRef.current) return;
+            audioArrived = true;
+            finalizeAudioMessage(assistantStreamId, audio);
+          },
         },
         controller.signal
       );
 
-      if (nonce === submitNonceRef.current) {
+      if (nonce === submitNonceRef.current && !audioArrived) {
+        // Text model reply — finalise normally
         finalizeMessage(assistantStreamId, reply);
 
-        if (speakReplies && reply) {
+        if (speakReplies && reply && modelId !== "image" && modelId !== "flash") {
           const plain = reply
             .replace(/```[\s\S]*?```/g, (block) =>
               block.replace(/\n/g, ". ")
             )
             .replace(/[#*`_~-]/g, "");
-          await speakText(plain);
+          playReplySpeech(plain);
         }
       }
     } catch (caught) {
@@ -580,7 +694,7 @@ export default function App() {
         caught instanceof Error && caught.message === "Request cancelled";
       const stale = nonce !== submitNonceRef.current;
 
-      if (wasAbort && (stale || !deltaArrived)) {
+      if (wasAbort && (stale || (!deltaArrived && !audioArrived))) {
         setStore((prev) => {
           if (!prev.activeId) return prev;
           return {
@@ -741,7 +855,10 @@ export default function App() {
               <input
                 type="checkbox"
                 checked={speakReplies}
-                onChange={(e) => setSpeakReplies(e.target.checked)}
+                onChange={(e) => {
+                  setSpeakReplies(e.target.checked);
+                  if (!e.target.checked) stopReplySpeech();
+                }}
               />
               Speak replies
             </label>
@@ -762,16 +879,17 @@ export default function App() {
             </button>
             <div className="brand">
               <div>
-                <h1>Minimax M3</h1>
-                <p>
-                   · multimodal · free
+                <h1>Multimodal Chat</h1>
+                <p className="model-meta">
+                  <span>{getModelById(selectedModel).name}</span>
+                  <span className="plan-label">Free plan</span>
                   {health ? (
                     <span className={`badge ${serverOk && keyOk ? "ok" : "warn"}`}>
                       {serverOk
                         ? keyOk
-                          ? "● Ready"
-                          : "● Key needed"
-                        : "● Server offline"}
+                          ? "Ready"
+                          : "Key needed"
+                        : "Server offline"}
                     </span>
                   ) : null}
                 </p>
@@ -785,13 +903,13 @@ export default function App() {
                 disabled={busy || recording}
                 title="Clear messages in this chat"
               >
-                Clear
+                Clear chat
               </button>
             </div>
           </header>
 
           <div className="active-title">
-            <span className="active-title-label">Chat:</span>
+            <span className="active-title-label">Current chat</span>
             <span className="active-title-name" title={active?.title}>
               {active?.title ?? "New chat"}
             </span>
@@ -839,100 +957,148 @@ export default function App() {
           ) : null}
 
           <div className="list" ref={listRef}>
-            {messages.map((message) => (
-              <article
-                key={message.id}
-                className={`bubble ${message.role} ${
-                  message.id === streamingId && !message.content
-                    ? "is-thinking"
-                    : ""
-                }`}
-              >
-                {message.images && message.images.length > 0 ? (
-                  <div className="bubble-images">
-                    {message.images.map((url, i) => (
-                      <img
-                        key={i}
-                        src={url}
-                        alt="Uploaded"
-                        className="bubble-img"
-                      />
-                    ))}
-                  </div>
-                ) : null}
+            {messages.length === 0 ? (
+              <div className="empty-chat" aria-live="polite">
+                <h2>Hi, how can I help?</h2>
+              </div>
+            ) : null}
+            {messages.map((message) => {
+              const msgType: MessageType = message.type ?? "text";
+              return (
+                <article
+                  key={message.id}
+                  className={`bubble ${message.role} ${
+                    message.id === streamingId &&
+                    !message.content &&
+                    (msgType === "text" || msgType === "audio")
+                      ? "is-thinking"
+                      : ""
+                  }`}
+                >
+                  {message.images && message.images.length > 0 ? (
+                    <div className="bubble-images">
+                      {message.images.map((url, i) => (
+                        <img
+                          key={i}
+                          src={url}
+                          alt="Uploaded"
+                          className="bubble-img"
+                        />
+                      ))}
+                    </div>
+                  ) : null}
 
-                {message.role === "assistant" ? (
-                  message.content ? (
-                    <ReactMarkdown
-                      components={{
-                        pre: ({ children }) => (
-                          <pre className="md-pre">{children}</pre>
-                        ),
-                        code: ({ className, children }) => {
-                          const isBlock = className?.includes("language-");
-                          return (
-                            <code
-                              className={
-                                isBlock
-                                  ? "md-code md-code-block"
-                                  : "md-code md-code-inline"
-                              }
+                  {msgType === "image" ? (
+                    <ImageMessage
+                      imageUrl={message.imageUrl ?? ""}
+                      prompt={message.prompt}
+                      model={message.model}
+                    />
+                  ) : msgType === "audio" ? (
+                    message.id === streamingId && !message.content ? (
+                      <span className="cursor-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    ) : (
+                      <AudioMessage
+                        audioUrl={message.audioUrl}
+                        prompt={message.prompt ?? message.content}
+                        onRegenerate={(text) => void submit(text, [], "flash")}
+                      />
+                    )
+                  ) : message.role === "assistant" ? (
+                    message.content ? (
+                      <ReactMarkdown
+                        components={{
+                          pre: ({ children }) => (
+                            <pre className="md-pre">{children}</pre>
+                          ),
+                          code: ({ className, children }) => {
+                            const isBlock = className?.includes("language-");
+                            return (
+                              <code
+                                className={
+                                  isBlock
+                                    ? "md-code md-code-block"
+                                    : "md-code md-code-inline"
+                                }
+                              >
+                                {children}
+                              </code>
+                            );
+                          },
+                          p: ({ children }) => <p className="md-p">{children}</p>,
+                          h1: ({ children }) => <h2 className="md-h">{children}</h2>,
+                          h2: ({ children }) => <h3 className="md-h">{children}</h3>,
+                          h3: ({ children }) => <h4 className="md-h">{children}</h4>,
+                          ul: ({ children }) => (
+                            <ul className="md-list md-ul">{children}</ul>
+                          ),
+                          ol: ({ children }) => (
+                            <ol className="md-list md-ol">{children}</ol>
+                          ),
+                          li: ({ children }) => <li className="md-li">{children}</li>,
+                          strong: ({ children }) => (
+                            <strong className="md-strong">{children}</strong>
+                          ),
+                          a: ({ href, children }) => (
+                            <a
+                              className="md-a"
+                              href={href}
+                              target="_blank"
+                              rel="noreferrer"
                             >
                               {children}
-                            </code>
-                          );
-                        },
-                        p: ({ children }) => <p className="md-p">{children}</p>,
-                        h1: ({ children }) => <h2 className="md-h">{children}</h2>,
-                        h2: ({ children }) => <h3 className="md-h">{children}</h3>,
-                        h3: ({ children }) => <h4 className="md-h">{children}</h4>,
-                        ul: ({ children }) => (
-                          <ul className="md-list md-ul">{children}</ul>
-                        ),
-                        ol: ({ children }) => (
-                          <ol className="md-list md-ol">{children}</ol>
-                        ),
-                        li: ({ children }) => <li className="md-li">{children}</li>,
-                        strong: ({ children }) => (
-                          <strong className="md-strong">{children}</strong>
-                        ),
-                        a: ({ href, children }) => (
-                          <a
-                            className="md-a"
-                            href={href}
-                            target="_blank"
-                            rel="noreferrer"
-                          >
-                            {children}
-                          </a>
-                        ),
-                        blockquote: ({ children }) => (
-                          <blockquote className="md-quote">{children}</blockquote>
-                        ),
-                        hr: () => <hr className="md-hr" />,
-                      }}
-                    >
-                      {message.content}
-                    </ReactMarkdown>
-                  ) : message.id === streamingId ? (
-                    <span className="cursor-dots">
-                      <span />
-                      <span />
-                      <span />
-                    </span>
-                  ) : null
-                ) : message.content ? (
-                  <p>{message.content}</p>
-                ) : null}
+                            </a>
+                          ),
+                          blockquote: ({ children }) => (
+                            <blockquote className="md-quote">{children}</blockquote>
+                          ),
+                          hr: () => <hr className="md-hr" />,
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    ) : message.id === streamingId ? (
+                      <span className="cursor-dots">
+                        <span />
+                        <span />
+                        <span />
+                      </span>
+                    ) : null
+                  ) : message.content ? (
+                    <p>{message.content}</p>
+                  ) : null}
 
-                {message.id === streamingId && message.content ? (
-                  <span className="typing-cursor" aria-hidden="true" />
-                ) : null}
-              </article>
-            ))}
+                  {msgType === "text" &&
+                  message.id === streamingId &&
+                  message.content ? (
+                    <span className="typing-cursor" aria-hidden="true" />
+                  ) : null}
+                </article>
+              );
+            })}
           </div>
 
           {error ? <p className="error">{error}</p> : null}
+
+          {isSpeaking ? (
+            <button
+              type="button"
+              className="stop-speaking-btn"
+              onClick={stopReplySpeech}
+            >
+              Stop speaking
+            </button>
+          ) : null}
+
+          <ModelSelector
+            selectedId={selectedModel}
+            onChange={setSelectedModel}
+            disabled={busy || recording}
+          />
 
           <form
             className="composer"
@@ -957,7 +1123,7 @@ export default function App() {
               type="button"
               className="attach-btn"
               onClick={() => fileInputRef.current?.click()}
-              disabled={busy || recording}
+              disabled={busy || recording || !getModelById(selectedModel).supportsAttachments}
               title="Attach image"
             >
               📎
@@ -997,7 +1163,7 @@ export default function App() {
                     ? "Listening…"
                     : pendingImages.length > 0
                     ? "Add a message (or send image only)…"
-                    : "Ask anything, paste image (Ctrl+V)…"
+                    : getModelById(selectedModel).placeholder
                 }
                 disabled={busy || recording}
               />

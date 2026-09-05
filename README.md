@@ -26,3 +26,22 @@ React + Express + TypeScript chatbot powered by **MiniMax M3 (free)** via OpenRo
 
 - Frontend: http://localhost:5173
 - API: http://localhost:3001
+
+## Deploying to Vercel and Railway
+
+Deploy the `server` folder to Railway and add this Railway environment variable:
+
+```
+OPENROUTER_API_KEY=sk-or-v1-...
+```
+
+Copy the Railway public domain, then deploy the `client` folder to Vercel with
+this environment variable. Do not add `/api` to the value; the client adds it.
+
+```
+VITE_API_URL=https://your-railway-service.up.railway.app
+```
+
+Redeploy Vercel after adding or changing `VITE_API_URL`, since Vite embeds
+`VITE_*` variables during the build. Verify the Railway deployment at
+`https://your-railway-service.up.railway.app/api/health` before opening Vercel.

@@ -1,5 +1,9 @@
 export type ChatRole = "user" | "assistant";
 
+export type ModelId = "text" | "flash" | "image";
+
+export type MessageType = "text" | "image" | "audio";
+
 export type ImagePart = {
   type: "image_url";
   image_url: {
@@ -18,6 +22,11 @@ export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
+  type?: MessageType;
+  model?: ModelId;
+  imageUrl?: string;
+  audioUrl?: string;
+  prompt?: string;
   images?: string[];
 };
 

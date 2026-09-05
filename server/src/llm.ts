@@ -20,9 +20,9 @@ export const llm = new OpenAI({
   baseURL: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
   defaultHeaders: {
     "HTTP-Referer": "http://localhost:5173",
-    "X-Title": "Gemma 4 Chatbot",
+    "X-Title": "Multimodal Chatbot",
   },
 });
 
-export const chatModel =
-  process.env.CHAT_MODEL ?? "google/gemma-4-26b-a4b-it:free";
+export const defaultTextModelId = "text";
+
