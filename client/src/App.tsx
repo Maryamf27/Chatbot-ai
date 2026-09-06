@@ -270,6 +270,7 @@ export default function App() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -530,11 +531,19 @@ export default function App() {
   function createNewChat() {
     abortChat();
     stopReplySpeech();
-    const convo = makeConversation();
-    setStore((prev) => ({
-      conversations: [convo, ...prev.conversations],
-      activeId: convo.id,
-    }));
+    setStore((prev) => {
+      const emptyChat = prev.conversations.find(
+        (conversation) =>
+          conversation.title === "New chat" && conversation.messages.length === 0
+      );
+      if (emptyChat) return { ...prev, activeId: emptyChat.id };
+
+      const convo = makeConversation();
+      return {
+        conversations: [convo, ...prev.conversations],
+        activeId: convo.id,
+      };
+    });
     setError(null);
     setSidebarOpen(false);
     setPendingImages([]);
@@ -551,9 +560,12 @@ export default function App() {
     setPendingImages([]);
   }
 
-  function deleteConversation(id: string, ev?: React.MouseEvent) {
+  function requestDeleteConversation(id: string, ev?: React.MouseEvent) {
     ev?.stopPropagation();
-    if (!window.confirm("Delete this chat?")) return;
+    setPendingDeleteId(id);
+  }
+
+  function deleteConversation(id: string) {
     if (id === activeId) {
       abortChat();
       stopReplySpeech();
@@ -570,7 +582,17 @@ export default function App() {
           : prev.activeId;
       return { conversations: remaining, activeId: newActiveId };
     });
+    setPendingDeleteId(null);
   }
+
+  useEffect(() => {
+    if (!pendingDeleteId) return;
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setPendingDeleteId(null);
+    }
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [pendingDeleteId]);
 
   function clearActiveMessages() {
     if (!window.confirm("Clear messages in this chat?")) return;
@@ -828,13 +850,13 @@ export default function App() {
                           <span className="min-w-0 flex-1 truncate">{c.title}</span>
                           <span
                             className="rounded p-1 text-xs text-[#667085] opacity-0 transition group-hover:opacity-100 focus:opacity-100"
-                            onClick={(e) => deleteConversation(c.id, e)}
+                            onClick={(e) => requestDeleteConversation(c.id, e)}
                             title="Delete chat"
                             role="button"
                             tabIndex={0}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ")
-                                deleteConversation(c.id);
+                                requestDeleteConversation(c.id);
                             }}
                           >
                             🗑
@@ -1173,6 +1195,53 @@ export default function App() {
           </form>
         </div>
       </main>
+
+      {pendingDeleteId ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070b]/75 px-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setPendingDeleteId(null);
+          }}
+        >
+          <div
+            className="w-full max-w-140 rounded-xl border border-[#252f3d] bg-[#111821] p-6 text-[#e8eef8] shadow-[0_22px_70px_rgba(0,0,0,.45)] max-[640px]:p-5"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="delete-chat-title"
+            aria-describedby="delete-chat-description"
+          >
+            <div className="flex items-start gap-5 max-[640px]:gap-3.5">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#667085]/45 text-3xl text-[#d0d5dd] max-[640px]:h-13 max-[640px]:w-13 max-[640px]:text-2xl" aria-hidden="true">
+                △
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <h2 id="delete-chat-title" className="m-0 text-xl font-bold text-white">Warning!</h2>
+                <p id="delete-chat-description" className="mt-2 text-base leading-relaxed text-[#98a2b3]">
+                  You will lose all of your data by deleting this chat.<br />
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2.5">
+              <button
+                type="button"
+                className="rounded-lg bg-[#2a323e] px-4 py-2.5 text-sm font-semibold text-[#e4e7ec] transition hover:bg-[#354050] focus:outline-none focus:ring-2 focus:ring-[#7db4ff]/50"
+                onClick={() => setPendingDeleteId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rounded-lg bg-[#ffb8ba] px-4 py-2.5 text-sm font-bold text-[#a71920] transition hover:bg-[#ffcacc] focus:outline-none focus:ring-2 focus:ring-[#ff8589]/60"
+                onClick={() => deleteConversation(pendingDeleteId)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
