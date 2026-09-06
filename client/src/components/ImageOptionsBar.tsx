@@ -24,13 +24,27 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return (
     <label className="flex min-w-0 flex-1 basis-32 flex-col gap-1">
       <span className="text-[11px] font-semibold uppercase tracking-wide text-[#6b7b92]">{label}</span>
-      {children}
+      <span className="relative block min-w-0">
+        {children}
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 12 12"
+          className="pointer-events-none absolute right-3 top-1/2 h-3 w-3 -translate-y-1/2 text-[#8b98ab]"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M2.5 4.5 6 8l3.5-3.5" />
+        </svg>
+      </span>
     </label>
   );
 }
 
 const selectClass =
-  "w-full min-w-0 rounded-lg border border-[#2a313b] bg-[#0f141c] px-2 py-1.5 text-sm text-[#e4e7ec] outline-none transition-colors hover:border-[#3a4658] focus-visible:border-[#5b8def] disabled:cursor-not-allowed disabled:opacity-50";
+  "w-full min-w-0 appearance-none rounded-lg border border-[#2a313b] bg-[#0f141c] py-1.5 pl-2.5 pr-9 text-sm text-[#e4e7ec] outline-none transition-colors hover:border-[#3a4658] focus-visible:border-[#5b8def] disabled:cursor-not-allowed disabled:opacity-50";
 
 export function ImageOptionsBar({ value, onChange, disabled }: Props) {
   const [models, setModels] = useState<ImageModelOption[]>([]);
