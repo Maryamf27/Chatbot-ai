@@ -979,14 +979,14 @@ export default function App() {
               <span className="text-lg leading-none text-[#7db4ff]">＋</span>
               New chat
             </button>
-            <button
+            {/* <button
               type="button"
               className="rounded-lg border border-[#1b2431] bg-transparent px-2.5 py-2 text-[#9aa8bd] xl:hidden"
               onClick={() => setSidebarOpen(false)}
               aria-label="Close sidebar"
             >
               ✕
-            </button>
+            </button> */}
           </div>
 
           <nav className="flex flex-1 flex-col gap-3.5 overflow-y-auto pr-0.5">
