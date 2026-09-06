@@ -24,6 +24,10 @@ const allowedOrigins = new Set([...localOrigins, ...configuredOrigins]);
 
 const isProd = process.env.NODE_ENV === "production";
 
+function isAllowedOrigin(origin: string): boolean {
+  return allowedOrigins.has(origin) || /^https:\/\/([a-z0-9-]+\.)*vercel\.app$/i.test(origin);
+}
+
 app.use(
   cors({
     origin: (origin, callback) => {
@@ -31,12 +35,12 @@ app.use(
         callback(null, true);
         return;
       }
-      if (allowedOrigins.has(origin)) {
+      if (isAllowedOrigin(origin)) {
         callback(null, true);
         return;
       }
       if (isProd) {
-        callback(new Error("Not allowed by CORS"));
+        callback(null, false);
         return;
       }
       callback(null, true);
