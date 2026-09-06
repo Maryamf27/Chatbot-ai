@@ -36,6 +36,12 @@ OPENROUTER_API_KEY=sk-or-v1-...
 CLIENT_URL=https://your-vercel-app.vercel.app
 ```
 
+For the current deployment, use:
+
+```
+CLIENT_URL=https://ai-chatbot-self-three-97.vercel.app
+```
+
 For multiple frontend domains, use a comma-separated `CORS_ORIGINS` value
 instead of `CLIENT_URL`.
 

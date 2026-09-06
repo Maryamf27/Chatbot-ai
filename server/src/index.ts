@@ -14,6 +14,7 @@ const localOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
+  "https://ai-chatbot-self-three-97.vercel.app",
 ];
 const configuredOrigins = (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? "")
   .split(",")
