@@ -43,6 +43,10 @@
     opacity: 0.5;
   }
 
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
   button,
   input {
     transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
