@@ -849,27 +849,23 @@ export default function App() {
                   <h4 className="mb-1.5 ml-2 text-xs font-semibold uppercase tracking-wide text-[#6b7b92]">{label}</h4>
                   <ul className="m-0 flex list-none flex-col gap-0 p-0">
                     {list.map((c) => (
-                      <li key={c.id}>
+                      <li key={c.id} className="group relative">
                         <button
                           type="button"
-                          className={`group relative flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm text-[#e4e7ec] transition hover:bg-[#17202c] ${c.id === activeId ? "border-[#315fce]/45 bg-[#182942]" : "border-transparent"}`}
+                          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 pr-10 text-left text-sm text-[#e4e7ec] transition hover:bg-[#17202c] ${c.id === activeId ? "border-[#315fce]/45 bg-[#182942]" : "border-transparent"}`}
                           onClick={() => switchConversation(c.id)}
                           title={c.title}
                         >
                           <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                          <span
-                            className="rounded p-1 text-xs text-[#667085] opacity-0 transition group-hover:opacity-100 focus:opacity-100"
-                            onClick={(e) => requestDeleteConversation(c.id, e)}
-                            title="Delete chat"
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ")
-                                requestDeleteConversation(c.id);
-                            }}
-                          >
-                            🗑
-                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          className="absolute right-1.5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-base leading-none text-[#98a2b3] opacity-80 transition hover:bg-red-400/15 hover:text-[#ff8589] focus:opacity-100"
+                          onClick={(e) => requestDeleteConversation(c.id, e)}
+                          title="Delete chat"
+                          aria-label={`Delete ${c.title}`}
+                        >
+                          🗑
                         </button>
                       </li>
                     ))}
