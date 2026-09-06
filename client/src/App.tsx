@@ -913,7 +913,7 @@ export default function App() {
             </span>
           </div>
 
-          {health && !keyOk ? (
+          {health && serverOk && !keyOk ? (
             <div className="rounded-xl border border-[#344e7a] bg-[#161f2d] p-4 text-sm leading-relaxed text-[#e4e7ec]">
               <strong className="mb-2 block">🔧 Setup your API key to chat with the model.</strong>
               <ol className="my-2 list-decimal space-y-1 pl-5">
