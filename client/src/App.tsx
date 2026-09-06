@@ -6,12 +6,15 @@ import {
   buildPayloadMessages,
   type HealthStatus,
   type AudioResponse,
+  type ImageResponse,
+  type ImageGenerationOptions,
 } from "./api";
 import { listenOnce, speakText, stopSpeaking } from "./speech";
 import type { ChatMessage, Conversation, ModelId, MessageType } from "./types";
 import { getModelById, DEFAULT_MODEL_ID } from "./config/models";
 import { ModelSelector } from "./components/ModelSelector";
 import { ImageMessage } from "./components/ImageMessage";
+import { ImageOptionsBar } from "./components/ImageOptionsBar";
 import { AudioMessage } from "./components/AudioMessage";
 
 const STORE_KEY = "ling-store:v2";
@@ -21,6 +24,32 @@ const MAX_MSGS_PER_CONVO = 80;
 
 function uid() {
   return crypto.randomUUID();
+}
+
+function PaperclipIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+      <path d="m21.4 11.6-8.8 8.8a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />
+    </svg>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+      <rect x="9" y="2.5" width="6" height="11" rx="3" />
+      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M8.5 21.5h7" />
+    </svg>
+  );
+}
+
+function SidebarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+      <rect x="3" y="4" width="18" height="16" rx="2.5" />
+      <path d="M9 4v16M6 8h1M6 12h1M6 16h1" />
+    </svg>
+  );
 }
 
 function validMessage(m: unknown): m is ChatMessage {
@@ -45,6 +74,10 @@ function validMessage(m: unknown): m is ChatMessage {
     msg.model === "image";
   const imageUrlOk =
     msg.imageUrl === undefined || typeof msg.imageUrl === "string";
+  const imageFallbackUrlsOk =
+    msg.imageFallbackUrls === undefined ||
+    (Array.isArray(msg.imageFallbackUrls) &&
+      (msg.imageFallbackUrls as unknown[]).every((url) => typeof url === "string"));
   const audioUrlOk =
     msg.audioUrl === undefined || typeof msg.audioUrl === "string";
   const promptOk = msg.prompt === undefined || typeof msg.prompt === "string";
@@ -56,6 +89,7 @@ function validMessage(m: unknown): m is ChatMessage {
       typeOk &&
       modelOk &&
       imageUrlOk &&
+      imageFallbackUrlsOk &&
       audioUrlOk &&
       promptOk
   );
@@ -103,8 +137,24 @@ function defaultStore(): StoreShape {
   return { conversations: [starter], activeId: starter.id };
 }
 
+function loadSharedConversation(): StoreShape | null {
+  try {
+    if (typeof window === "undefined" || !window.location.hash.startsWith("#share=")) {
+      return null;
+    }
+    const encoded = window.location.hash.slice("#share=".length);
+    const parsed = JSON.parse(decodeURIComponent(encoded)) as unknown;
+    if (!validConversation(parsed)) return null;
+    return { conversations: [parsed], activeId: parsed.id };
+  } catch {
+    return null;
+  }
+}
+
 function loadStore(): StoreShape {
   try {
+    const shared = loadSharedConversation();
+    if (shared) return shared;
     if (typeof localStorage === "undefined") return defaultStore();
     const raw = localStorage.getItem(STORE_KEY);
     if (!raw) {
@@ -269,9 +319,17 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
+  const [imageOptions, setImageOptions] = useState<ImageGenerationOptions>({
+    mode: "auto",
+    aspectRatio: "auto",
+    quality: "high",
+  });
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [pendingClearChat, setPendingClearChat] = useState(false);
+  const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -482,6 +540,35 @@ export default function App() {
     });
   }
 
+  function finalizeImageMessage(msgId: string, image: ImageResponse) {
+    setStore((prev) => {
+      if (!prev.activeId) return prev;
+      return {
+        ...prev,
+        conversations: prev.conversations.map((c) =>
+          c.id === prev.activeId
+            ? {
+                ...c,
+                messages: c.messages.map((m) =>
+                  m.id === msgId
+                    ? {
+                        ...m,
+                        content: image.prompt,
+                        imageUrl: image.imageUrl,
+                        imageFallbackUrls: image.fallbackUrls,
+                        imageWidth: image.width,
+                        imageHeight: image.height,
+                        prompt: image.prompt,
+                      }
+                    : m
+                ),
+              }
+            : c
+        ),
+      };
+    });
+  }
+
   function removePendingImage(idx: number) {
     setPendingImages((prev) => prev.filter((_, i) => i !== idx));
   }
@@ -560,6 +647,29 @@ export default function App() {
     setError(null);
     setSidebarOpen(false);
     setPendingImages([]);
+  }
+
+  function toggleSidebar() {
+    setSidebarOpen((open) => !open);
+    setSidebarCollapsed((collapsed) => !collapsed);
+  }
+
+  function createShareUrl() {
+    if (!active || typeof window === "undefined") return;
+    const serialized = encodeURIComponent(JSON.stringify(active));
+    setShareUrl(`${window.location.origin}${window.location.pathname}#share=${serialized}`);
+    setShareCopied(false);
+  }
+
+  async function copyShareUrl() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
+      /* The URL remains visible for manual copying when clipboard access is blocked. */
+    }
+    setShareCopied(true);
+    window.setTimeout(() => setShareCopied(false), 1800);
   }
 
   function requestDeleteConversation(id: string, ev?: React.MouseEvent) {
@@ -678,6 +788,7 @@ export default function App() {
 
     let deltaArrived = false;
     let audioArrived = false;
+    let imageArrived = false;
 
     try {
       const payloadMessages = buildPayloadMessages(
@@ -691,7 +802,11 @@ export default function App() {
       );
 
       const reply = await streamChat(
-        { model: modelId, messages: payloadMessages },
+        {
+          model: modelId,
+          messages: payloadMessages,
+          imageOptions: modelId === "image" ? imageOptions : undefined,
+        },
         {
           onDelta: (chunk) => {
             if (nonce !== submitNonceRef.current) return;
@@ -703,11 +818,16 @@ export default function App() {
             audioArrived = true;
             finalizeAudioMessage(assistantStreamId, audio);
           },
+          onImage: (image) => {
+            if (nonce !== submitNonceRef.current) return;
+            imageArrived = true;
+            finalizeImageMessage(assistantStreamId, image);
+          },
         },
         controller.signal
       );
 
-      if (nonce === submitNonceRef.current && !audioArrived) {
+      if (nonce === submitNonceRef.current && !audioArrived && !imageArrived) {
         // Text model reply — finalise normally
         finalizeMessage(assistantStreamId, reply);
 
@@ -819,9 +939,38 @@ export default function App() {
         />
       ) : null}
 
-      <aside className={`app-sidebar fixed left-0 top-0 z-20 flex h-dvh w-[84%] max-w-[320px] flex-col overflow-hidden border-r border-[#1b2431] bg-[#0b0f15] transition-transform xl:sticky xl:w-70 xl:max-w-none xl:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-[-102%]"}`}>
-        <div className="flex h-full flex-col gap-3 p-3">
+      <aside className={`app-sidebar fixed left-0 top-0 z-20 flex h-dvh w-[84%] max-w-[320px] flex-col overflow-hidden border-r border-[#1b2431] bg-[#0b0f15] transition-all xl:sticky xl:max-w-none xl:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-[-102%]"} ${sidebarCollapsed ? "xl:w-18" : "xl:w-70"}`}>
+        <div className={`hidden h-full flex-col items-center gap-3 border-r border-[#1b2431] p-3 ${sidebarCollapsed ? "xl:flex" : "xl:hidden"}`}>
+          <button
+            type="button"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#252525] text-[#f2f4f7] hover:bg-[#30343c]"
+            onClick={toggleSidebar}
+            aria-label="Open chat history"
+            title="Open chat history"
+          >
+            <SidebarIcon />
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-12 w-12 items-center justify-center rounded-xl text-2xl text-[#f2f4f7] hover:bg-[#1b2027]"
+            onClick={createNewChat}
+            aria-label="New chat"
+            title="New chat"
+          >
+            ＋
+          </button>
+        </div>
+        <div className={`flex h-full flex-col gap-3 p-3 ${sidebarCollapsed ? "xl:hidden" : ""}`}>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-[#1b2431] bg-[#121822] text-[#dbe9ff] hover:border-[#2a3648] hover:bg-[#18202e]"
+              onClick={toggleSidebar}
+              aria-label="Close chat history"
+              title="Close chat history"
+            >
+              <SidebarIcon />
+            </button>
             <button
               type="button"
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-[10px] border border-[#1b2431] bg-[#121822] px-3 py-2.5 text-sm font-medium transition hover:border-[#2a3648] hover:bg-[#18202e]"
@@ -892,35 +1041,38 @@ export default function App() {
       </aside>
 
       <main className="app-content min-w-0 flex-1 bg-[#0f141c]">
-        <div className="mx-auto flex h-dvh min-h-screen w-full max-w-215 flex-col gap-2.5 px-5 py-4.5 max-[640px]:px-2.5 max-[820px]:px-3.5">
+        <div className="mx-auto flex h-dvh min-h-screen w-full max-w-270 flex-col gap-2.5 px-5 py-4.5 max-[640px]:px-2.5 max-[820px]:px-3.5">
           <header className="app-header flex items-center justify-between gap-3 border-b border-[#252a32] px-0.5 pb-3.5 pt-1 max-[640px]:flex-wrap">
+            <div className="flex items-center gap-2 xl:hidden">
             <button
               type="button"
-              className="inline-flex rounded-lg border border-[#252a32] bg-[#161a20] px-2.5 py-2 text-base xl:hidden"
-              onClick={() => setSidebarOpen((o) => !o)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#252a32] bg-[#161a20] text-base text-[#c6d4e8] hover:bg-[#1b2027]"
+              onClick={toggleSidebar}
               aria-label="Toggle sidebar"
+              title="Toggle sidebar"
             >
               ☰
             </button>
-            <div className="min-w-0 flex-1">
-              <div>
-                <h1 className="m-0 text-xl font-semibold tracking-tight max-[820px]:text-lg">Multimodal Chat</h1>
-                <p className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[#98a2b3]">
-                  <span>{getModelById(selectedModel).name}</span>
-                  <span className="before:mr-2 before:content-['•']">Free plan</span>
-                  {health ? (
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[.7rem] font-semibold ${serverOk && keyOk ? "bg-emerald-400/10 text-emerald-300" : "bg-red-400/10 text-red-300"}`}>
-                      {serverOk
-                        ? keyOk
-                          ? "Ready"
-                          : "Key needed"
-                        : "Server offline"}
-                    </span>
-                  ) : null}
-                </p>
-              </div>
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#252a32] bg-[#161a20] text-xl text-[#7db4ff] hover:bg-[#1b2027]"
+              onClick={createNewChat}
+              aria-label="New chat"
+              title="New chat"
+            >
+              ＋
+            </button>
             </div>
             <div className="flex shrink-0 items-center gap-2.5 max-[640px]:ml-auto">
+              <button
+                type="button"
+                className="rounded-lg border border-[#2a313b] bg-transparent px-3 py-2 text-xs font-semibold text-[#98a2b3] hover:bg-[#1b2027]"
+                onClick={createShareUrl}
+                disabled={!active || messages.length === 0}
+                title="Share this chat"
+              >
+                Share
+              </button>
               <button
                 type="button"
                 className="rounded-lg border border-[#2a313b] bg-transparent px-3 py-2 text-xs font-semibold text-[#98a2b3] hover:bg-[#1b2027]"
@@ -932,13 +1084,6 @@ export default function App() {
               </button>
             </div>
           </header>
-
-          <div className="chat-context flex items-center gap-2 px-0.5 py-1 text-xs">
-            <span className="font-semibold uppercase tracking-wide text-[#667085]">Current chat</span>
-            <span className="min-w-0 flex-1 truncate text-[#98a2b3]" title={active?.title}>
-              {active?.title ?? "New chat"}
-            </span>
-          </div>
 
           {health && serverOk && !keyOk ? (
             <div className="rounded-xl border border-[#344e7a] bg-[#161f2d] p-4 text-sm leading-relaxed text-[#e4e7ec]">
@@ -1019,8 +1164,11 @@ export default function App() {
                   {msgType === "image" ? (
                     <ImageMessage
                       imageUrl={message.imageUrl ?? ""}
+                      fallbackUrls={message.imageFallbackUrls}
                       prompt={message.prompt}
                       model={message.model}
+                      width={message.imageWidth}
+                      height={message.imageHeight}
                     />
                   ) : msgType === "audio" ? (
                     message.id === streamingId && !message.content ? (
@@ -1112,6 +1260,21 @@ export default function App() {
 
           {error ? <p className="m-0 text-sm text-[#f97068]">{error}</p> : null}
 
+          {busy && selectedModel === "image" ? (
+            <div
+              className="flex items-center gap-2 rounded-lg border border-[#315fce]/35 bg-[#132238] px-3 py-2 text-sm text-[#9cc4ff]"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="inline-flex gap-1" aria-hidden="true">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:150ms]" />
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:300ms]" />
+              </span>
+              Creating your image from the prompt…
+            </div>
+          ) : null}
+
           {isSpeaking ? (
             <button
               type="button"
@@ -1128,8 +1291,16 @@ export default function App() {
             disabled={busy || recording}
           />
 
+          {selectedModel === "image" ? (
+            <ImageOptionsBar
+              value={imageOptions}
+              onChange={setImageOptions}
+              disabled={busy || recording}
+            />
+          ) : null}
+
           <form
-            className="composer flex items-end gap-2 max-[640px]:flex-wrap"
+            className="composer flex items-end gap-0 max-[640px]:flex-wrap"
             ref={composerRef}
             onSubmit={(event) => {
               event.preventDefault();
@@ -1149,23 +1320,25 @@ export default function App() {
             />
             <button
               type="button"
-              className="h-11 w-16 shrink-0 border border-[#252a32] bg-[#161a20] p-0 text-base text-[#98a2b3] hover:bg-[#1b2027]"
+              className="order-1 inline-flex h-10 w-10 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-[#98a2b3] hover:bg-[#252d3a] hover:text-[#dbe9ff]"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy || recording || !getModelById(selectedModel).supportsAttachments}
               title="Attach image"
               aria-label="Attach image"
             >
-              📎
+              <PaperclipIcon />
             </button>
             <button
               type="button"
-              className={`h-11 w-16 shrink-0 border p-0 text-sm ${recording ? "border-red-400/50 bg-red-400/10 text-[#f97068]" : "border-[#252a32] bg-[#161a20] text-[#98a2b3] hover:bg-[#1b2027]"}`}
+              className={`order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 p-0 ${recording ? "bg-red-400/15 text-[#f97068]" : "bg-transparent text-[#98a2b3] hover:bg-[#252d3a] hover:text-[#dbe9ff]"}`}
               onClick={() => void toggleMic()}
               disabled={busy || recording}
+              aria-label={recording ? "Listening" : "Use microphone"}
+              title={recording ? "Listening" : "Use microphone"}
             >
-              {recording ? "Listening" : "Mic"}
+              <MicIcon />
             </button>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5 max-[640px]:order-2 max-[640px]:basis-full">
+            <div className="order-2 flex min-w-0 flex-1 flex-col gap-1.5">
               {pendingImages.length > 0 ? (
                 <div className="flex flex-wrap gap-2 rounded-lg border border-[#2a313b] bg-[#15191e] p-1.5">
                   {pendingImages.map((url, i) => (
@@ -1185,7 +1358,7 @@ export default function App() {
               ) : null}
               <input
                 type="text"
-                className="w-full rounded-lg border border-[#2a313b] bg-[#15191e] px-3 py-2.5 text-[#f2f4f7] placeholder:text-[#667085] focus:border-[#5b8def] focus:outline-none focus:ring-2 focus:ring-[#5b8def]/15"
+                className="w-full border-0 bg-transparent px-2 py-2.5 text-[#f2f4f7] placeholder:text-[#667085] focus:outline-none focus:ring-0"
                 value={input}
                 onChange={(event) => setInput(event.target.value)}
                 placeholder={
@@ -1198,8 +1371,8 @@ export default function App() {
                 disabled={busy || recording}
               />
             </div>
-            <button type="submit" className="rounded-lg bg-[#5b8def] px-3 py-2.5 text-white hover:bg-[#6b9bff] max-[640px]:order-3 max-[640px]:w-full" disabled={busy || recording}>
-              Send
+            <button type="submit" className="order-4 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#5b8def] p-0 text-lg font-semibold text-white hover:bg-[#6b9bff] max-[640px]:w-10" disabled={busy || recording} aria-label="Send message" title="Send message">
+              ↑
             </button>
           </form>
         </div>
@@ -1210,7 +1383,10 @@ export default function App() {
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070b]/75 px-4 backdrop-blur-[2px]"
           role="presentation"
           onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setPendingDeleteId(null);
+            if (event.target === event.currentTarget) {
+              setPendingDeleteId(null);
+              setPendingClearChat(false);
+            }
           }}
         >
           <div
@@ -1255,6 +1431,56 @@ export default function App() {
                 }}
               >
                 Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {shareUrl ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070b]/75 px-4 backdrop-blur-[2px]"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShareUrl(null);
+          }}
+        >
+          <div
+            className="w-full max-w-140 rounded-xl border border-[#252f3d] bg-[#111821] p-6 text-[#e8eef8] shadow-[0_22px_70px_rgba(0,0,0,.45)] max-[640px]:p-5"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="share-chat-title"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="share-chat-title" className="m-0 text-xl font-bold text-white">Share chat</h2>
+                <p className="mt-2 text-sm leading-relaxed text-[#98a2b3]">
+                  Anyone with this public URL can open a snapshot copy of this conversation.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="h-8 w-8 rounded-lg text-lg text-[#98a2b3] hover:bg-[#1b2027] hover:text-white"
+                onClick={() => setShareUrl(null)}
+                aria-label="Close share dialog"
+              >
+                ×
+              </button>
+            </div>
+            <div className="mt-5 flex gap-2 max-[640px]:flex-col">
+              <input
+                readOnly
+                value={shareUrl}
+                className="min-w-0 flex-1 rounded-lg border border-[#2a313b] bg-[#0d141f] px-3 py-2.5 text-sm text-[#c9d8ee] focus:outline-none"
+                onFocus={(event) => event.currentTarget.select()}
+                aria-label="Public share URL"
+              />
+              <button
+                type="button"
+                className="rounded-lg bg-[#5b8def] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6b9bff]"
+                onClick={() => void copyShareUrl()}
+              >
+                {shareCopied ? "Copied!" : "Copy link"}
               </button>
             </div>
           </div>

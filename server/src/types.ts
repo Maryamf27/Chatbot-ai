@@ -14,4 +14,10 @@ export type ChatMessage = {
 export type ChatBody = {
   model?: unknown;
   messages: ChatMessage[];
+  imageOptions?: {
+    mode?: "auto" | "manual";
+    model?: string;
+    aspectRatio?: "auto" | "square" | "portrait" | "landscape" | "wide";
+    quality?: "auto" | "high";
+  };
 };

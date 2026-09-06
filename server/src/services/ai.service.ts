@@ -28,7 +28,11 @@ export async function routeChat(model: unknown, req: Request, res: Response): Pr
       await handleFlashChat({ messages, res });
       return;
     case "image":
-      await handleImageGenerate({ messages, res });
+      await handleImageGenerate({
+        messages,
+        res,
+        options: req.body?.imageOptions,
+      });
       return;
   }
 }

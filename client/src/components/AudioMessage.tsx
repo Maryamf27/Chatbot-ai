@@ -18,6 +18,7 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
+  const [durationKnown, setDurationKnown] = useState(false);
 
   if (!audioUrl) {
     return (
@@ -35,11 +36,40 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
             </button>
           ) : null}
           <p className="m-0 mt-2 text-sm text-[#91a7c3]">
-            {prompt ? `Resend “${prompt}” to regenerate the audio.` : "Resend to regenerate the audio."}
+            {prompt ? `Resend "${prompt}" to regenerate the audio.` : "Resend to regenerate the audio."}
           </p>
         </div>
       </div>
     );
+  }
+
+  function applyDuration(value: number) {
+    if (Number.isFinite(value) && value > 0) {
+      setDuration(value);
+      setDurationKnown(true);
+    }
+  }
+
+  // Some browsers (notably Chrome) report `Infinity` for a freshly-loaded
+  // audio source's duration instead of the real length, which is why the
+  // player used to get stuck showing "0:00 / 0:00". The fix: seek to a very
+  // large timestamp, which forces the browser to resolve and report the
+  // real duration via `durationchange`, then seek back to the start.
+  function handleLoadedMetadata(event: React.SyntheticEvent<HTMLAudioElement>) {
+    const player = event.currentTarget;
+    if (Number.isFinite(player.duration) && player.duration > 0) {
+      applyDuration(player.duration);
+      return;
+    }
+    const onDurationChange = () => {
+      if (Number.isFinite(player.duration) && player.duration > 0) {
+        applyDuration(player.duration);
+        player.currentTime = 0;
+        player.removeEventListener("durationchange", onDurationChange);
+      }
+    };
+    player.addEventListener("durationchange", onDurationChange);
+    player.currentTime = 1e101;
   }
 
   function togglePlayback() {
@@ -59,17 +89,19 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
     setCurrentTime(value);
   }
 
+  const progressPercent = durationKnown && duration ? (currentTime / duration) * 100 : 0;
+
   return (
-    <div className="w-full max-w-82.5 rounded-[14px] border border-[#294c7d] bg-[#121e2e] p-3 text-[#e8eef8]">
+    <div className="w-full max-w-90 rounded-2xl border border-[#294c7d] bg-linear-to-b from-[#152438] to-[#101a29] p-3.5 text-[#e8eef8] shadow-[0_8px_24px_rgba(0,0,0,.25)]">
       <audio
         ref={playerRef}
         src={audioUrl}
         preload="metadata"
-        onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+        onLoadedMetadata={handleLoadedMetadata}
         onTimeUpdate={(event) => {
           const { currentTime: nextTime, duration: nextDuration } = event.currentTarget;
           setCurrentTime(
-            nextDuration > 0 && nextDuration - nextTime < 0.1
+            Number.isFinite(nextDuration) && nextDuration > 0 && nextDuration - nextTime < 0.1
               ? nextDuration
               : nextTime
           );
@@ -78,17 +110,33 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
         onPause={() => setIsPlaying(false)}
         onEnded={(event) => {
           setIsPlaying(false);
-          setCurrentTime(event.currentTarget.duration);
+          if (Number.isFinite(event.currentTarget.duration)) {
+            setCurrentTime(event.currentTarget.duration);
+          }
         }}
       />
-      <div className="flex items-center gap-2 border-b border-[#29405d] pb-2 text-sm font-bold uppercase tracking-wide">
-        <span className="flex h-4.5 w-4.5 items-center justify-center rounded-md bg-linear-to-br from-[#43c7c6] to-[#4787ef] text-xs text-[#07111f]" aria-hidden="true">F</span>
+      <div className="flex items-center gap-2 border-b border-[#29405d] pb-2.5 text-sm font-bold uppercase tracking-wide">
+        <span
+          className="flex h-5 w-5 items-center justify-center rounded-md bg-linear-to-br from-[#43c7c6] to-[#4787ef] text-xs text-[#07111f]"
+          aria-hidden="true"
+        >
+          F
+        </span>
         <span>Fish Audio</span>
+        <a
+          href={audioUrl}
+          download
+          className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-sm normal-case text-[#91a7c3] hover:bg-[#1c2c42] hover:text-[#dbe9ff]"
+          title="Download audio"
+          aria-label="Download audio"
+        >
+          ⬇
+        </a>
       </div>
-      <div className="flex items-center gap-2.5 py-2.5">
+      <div className="flex items-center gap-3 py-3">
         <button
           type="button"
-          className="flex h-9.5 w-9.5 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[#4b92ff] to-[#2962d8] text-sm text-white shadow-[0_4px_12px_rgba(43,108,255,.35)]"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[#4b92ff] to-[#2962d8] text-sm text-white shadow-[0_4px_12px_rgba(43,108,255,.35)] transition-transform hover:scale-105 active:scale-95"
           onClick={togglePlayback}
           aria-label={isPlaying ? "Pause audio" : "Play audio"}
           title={isPlaying ? "Pause audio" : "Play audio"}
@@ -97,20 +145,23 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
         </button>
         <div className="min-w-0 flex-1">
           <input
-            className="block h-1.25 w-full cursor-pointer appearance-none rounded-full bg-[#34445b] accent-[#5f9cff]"
+            className="audio-seek block w-full cursor-pointer"
             type="range"
             min="0"
-            max={duration || 0}
+            max={durationKnown ? duration : 0}
             step="any"
-            value={Math.min(currentTime, duration || 0)}
+            value={durationKnown ? Math.min(currentTime, duration) : 0}
+            disabled={!durationKnown}
             onChange={(event) => seek(Number(event.target.value))}
             aria-label="Audio progress"
-            style={{ "--audio-progress": `${duration ? (currentTime / duration) * 100 : 0}%` } as React.CSSProperties}
+            style={{ "--audio-progress": `${progressPercent}%` } as React.CSSProperties}
           />
-          <span className="block text-xs tabular-nums text-[#91a7c3]">{formatTime(currentTime)} / {formatTime(duration)}</span>
+          <span className="mt-1 block text-xs font-medium tabular-nums text-[#91a7c3]">
+            {formatTime(currentTime)} / {durationKnown ? formatTime(duration) : "--:--"}
+          </span>
         </div>
       </div>
-      {prompt ? <p className="m-0 border-t border-[#29405d] pt-2 text-base leading-snug">{prompt}</p> : null}
+      {prompt ? <p className="m-0 border-t border-[#29405d] pt-2.5 text-base leading-snug">{prompt}</p> : null}
     </div>
   );
 }

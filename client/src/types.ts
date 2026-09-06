@@ -25,6 +25,9 @@ export type ChatMessage = {
   type?: MessageType;
   model?: ModelId;
   imageUrl?: string;
+  imageFallbackUrls?: string[];
+  imageWidth?: number;
+  imageHeight?: number;
   audioUrl?: string;
   prompt?: string;
   images?: string[];

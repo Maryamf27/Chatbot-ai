@@ -113,6 +113,87 @@
   box-shadow: 0 0 0 20px rgba(125, 180, 255, 0.025), 0 0 0 40px rgba(125, 180, 255, 0.018);
 }
 
+.image-generation-frame {
+  overflow: hidden;
+  border: 1px solid rgba(91, 141, 239, 0.38);
+  background-color: #101a2a;
+  background-image:
+    radial-gradient(circle at 50% 52%, rgba(91, 141, 239, 0.16), transparent 48%),
+    radial-gradient(circle, rgba(151, 181, 226, 0.24) 1.25px, transparent 1.7px);
+  background-position: center;
+  background-size: 100% 100%, 26px 26px;
+  isolation: isolate;
+}
+
+.image-generation-frame::before {
+  position: absolute;
+  inset: 10% 8% 4%;
+  background: radial-gradient(ellipse at center, rgba(91, 141, 239, 0.3), transparent 62%);
+  content: "";
+  filter: blur(10px);
+  opacity: 0.7;
+  animation: image-generation-pulse 2.2s ease-in-out infinite;
+}
+
+@keyframes image-generation-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.92);
+  }
+
+  50% {
+    opacity: 0.9;
+    transform: scale(1.04);
+  }
+}
+
+.audio-seek {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 5px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    #5f9cff var(--audio-progress, 0%),
+    #2a3648 var(--audio-progress, 0%)
+  );
+  outline: none;
+}
+
+.audio-seek::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.audio-seek::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: none;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  cursor: pointer;
+}
+
+.audio-seek::-moz-range-track {
+  height: 5px;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.audio-seek:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .model-selector {
   border-color: rgba(101, 119, 148, 0.22) !important;
   padding-top: 14px !important;

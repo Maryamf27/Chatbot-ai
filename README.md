@@ -4,7 +4,7 @@ React + Express + TypeScript chatbot powered by **MiniMax M3 (free)** via OpenRo
 
 - **Text chat** — MiniMax M3
 - **Voice** — browser speech recognition and spoken replies
-- **Images** — upload a photo and ask MiniMax to identify it
+- **Images** — upload a photo for analysis or generate an image with Pollinations AI
 
 ## Setup
 
@@ -15,6 +15,12 @@ React + Express + TypeScript chatbot powered by **MiniMax M3 (free)** via OpenRo
    OPENROUTER_API_KEY=sk-or-v1-...
    CHAT_MODEL=minimax/minimax-m3:free
    ```
+
+Image generation uses Pollinations AI through the image model in the app and
+automatically selects a compatible model, aspect ratio, and prompt treatment
+for each request. Set `IMAGE_MODEL` to provide a preferred fallback model; the
+legacy fallback is `flux`. The optional `IMAGE_MODELS` environment variable can
+provide a comma-separated fallback catalog override.
 
 3. Install and run:
 

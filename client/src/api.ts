@@ -24,6 +24,7 @@ type MessagePayload = {
 type ChatPayload = {
   model: ModelId;
   messages: MessagePayload[];
+  imageOptions?: ImageGenerationOptions;
 };
 
 export type HealthStatus = {
@@ -39,11 +40,45 @@ export type AudioResponse = {
   prompt: string;  
 };
 
+export type ImageResponse = {
+  imageUrl: string;
+  fallbackUrls?: string[];
+  prompt: string;
+  model?: string;
+  width?: number;
+  height?: number;
+};
+
+export type ImageGenerationOptions = {
+  mode?: "auto" | "manual";
+  model?: string;
+  aspectRatio?: "auto" | "square" | "portrait" | "landscape" | "wide";
+  quality?: "auto" | "high";
+};
+
+export type ImageModelOption = {
+  id: string;
+  label: string;
+  description: string;
+};
+
+export async function fetchImageModels(signal?: AbortSignal): Promise<ImageModelOption[]> {
+  try {
+    const response = await fetch(apiUrl("image-models"), { signal });
+    if (!response.ok) return [];
+    const data = (await response.json()) as { models?: ImageModelOption[] };
+    return Array.isArray(data.models) ? data.models : [];
+  } catch {
+    return [];
+  }
+}
+
 export type StreamHandlers = {
   onDelta?: (chunk: string) => void;
   onError?: (message: string) => void;
   onDone?: (full: string) => void;
   onAudio?: (audio: AudioResponse) => void;
+  onImage?: (image: ImageResponse) => void;
 };
 
 export async function fetchHealth(
@@ -85,7 +120,7 @@ export async function streamChat(
   handlers: StreamHandlers = {},
   signal?: AbortSignal
 ): Promise<string> {
-  const { onDelta, onError, onDone, onAudio } = handlers;
+  const { onDelta, onError, onDone, onAudio, onImage } = handlers;
 
   let response: Response;
   try {
@@ -132,6 +167,11 @@ export async function streamChat(
       format?: string;
       data?: string;
       prompt?: string;
+      imageUrl?: string;
+      fallbackUrls?: string[];
+      model?: string;
+      width?: number;
+      height?: number;
     };
 
     // Flash audio response
@@ -145,6 +185,18 @@ export async function streamChat(
       };
       onAudio?.(audio);
       // Return the prompt as the text content so nonce/abort logic still works
+      return data.prompt ?? "";
+    }
+
+    if (data.type === "image" && typeof data.imageUrl === "string") {
+      onImage?.({
+        imageUrl: data.imageUrl,
+        fallbackUrls: data.fallbackUrls,
+        prompt: data.prompt ?? "",
+        model: data.model,
+        width: data.width,
+        height: data.height,
+      });
       return data.prompt ?? "";
     }
 

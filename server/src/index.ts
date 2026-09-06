@@ -3,6 +3,7 @@ import cors from "cors";
 import express from "express";
 import { chatRouter } from "./routes/chat.js";
 import { isApiKeyConfigured, defaultTextModelId } from "./llm.js";
+import { IMAGE_MODEL_CATALOG } from "./services/image-generation.js";
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
@@ -56,6 +57,10 @@ app.get("/api/health", (_req, res) => {
     model: defaultTextModelId,
     apiKeyConfigured: isApiKeyConfigured(),
   });
+});
+
+app.get("/api/image-models", (_req, res) => {
+  res.json({ models: IMAGE_MODEL_CATALOG });
 });
 
 app.use("/api/chat", chatRouter);

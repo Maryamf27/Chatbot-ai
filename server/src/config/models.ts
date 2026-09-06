@@ -3,7 +3,7 @@ import type { ModelId } from "../types.js";
 export type ModelType = "text" | "audio" | "image";
 
 export type AiModelConfig = {
-  provider: "openrouter";
+  provider: "openrouter" | "pollinations";
   model: string;
   type: ModelType;
 };
@@ -23,8 +23,8 @@ export const AI_MODELS: Record<ModelId, AiModelConfig> = {
     type: "audio",
   },
   image: {
-    provider: "openrouter",
-    model: process.env.IMAGE_MODEL ?? "",
+    provider: "pollinations",
+    model: process.env.IMAGE_MODEL || "flux",
     type: "image",
   },
 };
