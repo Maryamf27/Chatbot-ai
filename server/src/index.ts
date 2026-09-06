@@ -8,13 +8,18 @@ const app = express();
 const port = Number(process.env.PORT) || 3001;
 
 const clientPort = Number(process.env.CLIENT_PORT) || 5173;
-const allowedOrigins = [
+const localOrigins = [
   `http://localhost:${clientPort}`,
   `http://127.0.0.1:${clientPort}`,
   "http://localhost:5173",
   "http://localhost:5174",
   "http://localhost:5175",
 ];
+const configuredOrigins = (process.env.CORS_ORIGINS ?? process.env.CLIENT_URL ?? "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/$/, ""))
+  .filter(Boolean);
+const allowedOrigins = new Set([...localOrigins, ...configuredOrigins]);
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -25,7 +30,7 @@ app.use(
         callback(null, true);
         return;
       }
-      if (allowedOrigins.includes(origin)) {
+      if (allowedOrigins.has(origin)) {
         callback(null, true);
         return;
       }

@@ -32,18 +32,17 @@ export type HealthStatus = {
   apiKeyConfigured: boolean;
 };
 
-/** Returned by streamChat when the server responds with a Flash audio message. */
+
 export type AudioResponse = {
-  dataUri: string;  // "data:audio/mpeg;base64,..."
-  format: string;   // "mp3" | "pcm"
-  prompt: string;   // the text that was converted to speech
+  dataUri: string; 
+  format: string; 
+  prompt: string;  
 };
 
 export type StreamHandlers = {
   onDelta?: (chunk: string) => void;
   onError?: (message: string) => void;
   onDone?: (full: string) => void;
-  /** Called instead of onDone when the response is a Flash audio message. */
   onAudio?: (audio: AudioResponse) => void;
 };
 

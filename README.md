@@ -33,7 +33,11 @@ Deploy the `server` folder to Railway and add this Railway environment variable:
 
 ```
 OPENROUTER_API_KEY=sk-or-v1-...
+CLIENT_URL=https://your-vercel-app.vercel.app
 ```
+
+For multiple frontend domains, use a comma-separated `CORS_ORIGINS` value
+instead of `CLIENT_URL`.
 
 Copy the Railway public domain, then deploy the `client` folder to Vercel with
 this environment variable. Do not add `/api` to the value; the client adds it.
