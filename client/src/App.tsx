@@ -271,6 +271,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingImages, setPendingImages] = useState<string[]>([]);
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+  const [pendingClearChat, setPendingClearChat] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -381,6 +382,7 @@ export default function App() {
   }, [speakReplies]);
 
   useEffect(() => {
+    if (messages.length === 0) return;
     listRef.current?.scrollTo({
       top: listRef.current.scrollHeight,
       behavior: "smooth",
@@ -588,19 +590,26 @@ export default function App() {
   useEffect(() => {
     if (!pendingDeleteId) return;
     function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape") setPendingDeleteId(null);
+      if (event.key === "Escape") {
+        setPendingDeleteId(null);
+        setPendingClearChat(false);
+      }
     }
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
   }, [pendingDeleteId]);
 
   function clearActiveMessages() {
-    if (!window.confirm("Clear messages in this chat?")) return;
     abortChat();
     stopReplySpeech();
     updateActive((c) => ({ ...c, messages: [] }), true);
     setError(null);
     setPendingImages([]);
+    setPendingClearChat(false);
+  }
+
+  function requestClearActiveMessages() {
+    setPendingClearChat(true);
   }
 
   async function submit(
@@ -802,7 +811,7 @@ export default function App() {
   const keyOk = health?.apiKeyConfigured;
 
   return (
-    <div className="relative flex min-h-screen w-full bg-[#0f141c] text-[#e8eef8]">
+    <div className="app-shell relative flex min-h-screen w-full bg-[#0f141c] text-[#e8eef8]">
       {sidebarOpen ? (
         <div
           className="fixed inset-0 z-18 bg-black/45 xl:hidden"
@@ -810,7 +819,7 @@ export default function App() {
         />
       ) : null}
 
-      <aside className={`fixed left-0 top-0 z-20 flex h-dvh w-[84%] max-w-[320px] flex-col overflow-hidden border-r border-[#1b2431] bg-[#0b0f15] transition-transform xl:sticky xl:w-70 xl:max-w-none xl:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-[-102%]"}`}>
+      <aside className={`app-sidebar fixed left-0 top-0 z-20 flex h-dvh w-[84%] max-w-[320px] flex-col overflow-hidden border-r border-[#1b2431] bg-[#0b0f15] transition-transform xl:sticky xl:w-70 xl:max-w-none xl:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-[-102%]"}`}>
         <div className="flex h-full flex-col gap-3 p-3">
           <div className="flex items-center gap-2">
             <button
@@ -886,9 +895,9 @@ export default function App() {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 bg-[#0f141c]">
+      <main className="app-content min-w-0 flex-1 bg-[#0f141c]">
         <div className="mx-auto flex h-dvh min-h-screen w-full max-w-215 flex-col gap-2.5 px-5 py-4.5 max-[640px]:px-2.5 max-[820px]:px-3.5">
-          <header className="flex items-center justify-between gap-3 border-b border-[#252a32] px-0.5 pb-3.5 pt-1 max-[640px]:flex-wrap">
+          <header className="app-header flex items-center justify-between gap-3 border-b border-[#252a32] px-0.5 pb-3.5 pt-1 max-[640px]:flex-wrap">
             <button
               type="button"
               className="inline-flex rounded-lg border border-[#252a32] bg-[#161a20] px-2.5 py-2 text-base xl:hidden"
@@ -919,7 +928,7 @@ export default function App() {
               <button
                 type="button"
                 className="rounded-lg border border-[#2a313b] bg-transparent px-3 py-2 text-xs font-semibold text-[#98a2b3] hover:bg-[#1b2027]"
-                onClick={clearActiveMessages}
+                onClick={requestClearActiveMessages}
                 disabled={busy || recording}
                 title="Clear messages in this chat"
               >
@@ -928,7 +937,7 @@ export default function App() {
             </div>
           </header>
 
-          <div className="flex items-center gap-2 px-0.5 py-1 text-xs">
+          <div className="chat-context flex items-center gap-2 px-0.5 py-1 text-xs">
             <span className="font-semibold uppercase tracking-wide text-[#667085]">Current chat</span>
             <span className="min-w-0 flex-1 truncate text-[#98a2b3]" title={active?.title}>
               {active?.title ?? "New chat"}
@@ -976,9 +985,12 @@ export default function App() {
             </div>
           ) : null}
 
-          <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto py-2.5 pr-3 scrollbar-gutter-stable" ref={listRef}>
+          <div
+            className={`flex flex-col gap-2.5 py-2.5 pr-3 scrollbar-gutter-stable ${messages.length === 0 ? "min-h-30 flex-none overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}
+            ref={listRef}
+          >
             {messages.length === 0 ? (
-              <div className="flex flex-1 flex-col items-center justify-center p-6 text-center text-[#98a2b3]" aria-live="polite">
+              <div className="empty-state flex flex-1 flex-col items-center justify-center p-6 text-center text-[#98a2b3]" aria-live="polite">
                 <h2 className="m-0 text-2xl font-semibold tracking-tight">Hi, how can I help?</h2>
               </div>
             ) : null}
@@ -1121,7 +1133,7 @@ export default function App() {
           />
 
           <form
-            className="flex items-end gap-2 max-[640px]:flex-wrap"
+            className="composer flex items-end gap-2 max-[640px]:flex-wrap"
             ref={composerRef}
             onSubmit={(event) => {
               event.preventDefault();
@@ -1141,16 +1153,17 @@ export default function App() {
             />
             <button
               type="button"
-              className="border border-[#252a32] bg-[#161a20] px-3 py-2.5 text-base text-[#98a2b3] hover:bg-[#1b2027]"
+              className="h-11 w-16 shrink-0 border border-[#252a32] bg-[#161a20] p-0 text-base text-[#98a2b3] hover:bg-[#1b2027]"
               onClick={() => fileInputRef.current?.click()}
               disabled={busy || recording || !getModelById(selectedModel).supportsAttachments}
               title="Attach image"
+              aria-label="Attach image"
             >
               📎
             </button>
             <button
               type="button"
-              className={`border px-3 py-2.5 text-sm ${recording ? "border-red-400/50 bg-red-400/10 text-[#f97068]" : "border-[#252a32] bg-[#161a20] text-[#98a2b3] hover:bg-[#1b2027]"}`}
+              className={`h-11 w-16 shrink-0 border p-0 text-sm ${recording ? "border-red-400/50 bg-red-400/10 text-[#f97068]" : "border-[#252a32] bg-[#161a20] text-[#98a2b3] hover:bg-[#1b2027]"}`}
               onClick={() => void toggleMic()}
               disabled={busy || recording}
             >
@@ -1196,7 +1209,7 @@ export default function App() {
         </div>
       </main>
 
-      {pendingDeleteId ? (
+      {pendingDeleteId || pendingClearChat ? (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070b]/75 px-4 backdrop-blur-[2px]"
           role="presentation"
@@ -1208,17 +1221,17 @@ export default function App() {
             className="w-full max-w-140 rounded-xl border border-[#252f3d] bg-[#111821] p-6 text-[#e8eef8] shadow-[0_22px_70px_rgba(0,0,0,.45)] max-[640px]:p-5"
             role="alertdialog"
             aria-modal="true"
-            aria-labelledby="delete-chat-title"
-            aria-describedby="delete-chat-description"
+            aria-labelledby="chat-action-title"
+            aria-describedby="chat-action-description"
           >
             <div className="flex items-start gap-5 max-[640px]:gap-3.5">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#667085]/45 text-3xl text-[#d0d5dd] max-[640px]:h-13 max-[640px]:w-13 max-[640px]:text-2xl" aria-hidden="true">
                 △
               </div>
               <div className="min-w-0 flex-1 pt-0.5">
-                <h2 id="delete-chat-title" className="m-0 text-xl font-bold text-white">Warning!</h2>
-                <p id="delete-chat-description" className="mt-2 text-base leading-relaxed text-[#98a2b3]">
-                  You will lose all of your data by deleting this chat.<br />
+                <h2 id="chat-action-title" className="m-0 text-xl font-bold text-white">Warning!</h2>
+                <p id="chat-action-description" className="mt-2 text-base leading-relaxed text-[#98a2b3]">
+                  {pendingClearChat ? "You will lose all messages in this chat." : "You will lose all of your data by deleting this chat."}<br />
                   This action cannot be undone.
                 </p>
               </div>
@@ -1227,14 +1240,23 @@ export default function App() {
               <button
                 type="button"
                 className="rounded-lg bg-[#2a323e] px-4 py-2.5 text-sm font-semibold text-[#e4e7ec] transition hover:bg-[#354050] focus:outline-none focus:ring-2 focus:ring-[#7db4ff]/50"
-                onClick={() => setPendingDeleteId(null)}
+                onClick={() => {
+                  setPendingDeleteId(null);
+                  setPendingClearChat(false);
+                }}
               >
                 Cancel
               </button>
               <button
                 type="button"
                 className="rounded-lg bg-[#ffb8ba] px-4 py-2.5 text-sm font-bold text-[#a71920] transition hover:bg-[#ffcacc] focus:outline-none focus:ring-2 focus:ring-[#ff8589]/60"
-                onClick={() => deleteConversation(pendingDeleteId)}
+                onClick={() => {
+                  if (pendingClearChat) {
+                    clearActiveMessages();
+                  } else if (pendingDeleteId) {
+                    deleteConversation(pendingDeleteId);
+                  }
+                }}
               >
                 Delete
               </button>

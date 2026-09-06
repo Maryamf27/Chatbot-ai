@@ -24,7 +24,7 @@ export function ModelSelector({ selectedId, onChange, disabled }: Props) {
   }
 
   return (
-    <div className="flex w-full flex-col gap-1.5 border-t border-[#252f3d] pt-2.5" role="group" aria-label="Choose a model">
+    <div className="model-selector flex w-full flex-col gap-1.5 border-t border-[#252f3d] pt-2.5" role="group" aria-label="Choose a model">
       <span className="text-xs font-bold uppercase tracking-[.06em] text-[#6b7b92]">Choose a model</span>
       <div className="relative hidden max-[640px]:block">
         <button

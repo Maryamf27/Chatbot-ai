@@ -2,9 +2,10 @@
 
 @layer base {
   :root {
-    font-family: "Segoe UI", system-ui, sans-serif;
+    font-family: "Aptos", "Segoe UI", system-ui, sans-serif;
     color: #e8eef8;
-    background: #0f141c;
+    background: #0b1018;
+    color-scheme: dark;
   }
 
   *,
@@ -21,7 +22,10 @@
   body {
     margin: 0;
     min-height: 100vh;
-    background: #0f141c;
+    background:
+      radial-gradient(circle at 8% 0%, rgba(49, 95, 206, 0.14), transparent 30rem),
+      radial-gradient(circle at 94% 100%, rgba(40, 114, 111, 0.1), transparent 25rem),
+      #0b1018;
   }
 
   html,
@@ -37,5 +41,99 @@
   button:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+  }
+
+  button,
+  input {
+    transition: border-color 160ms ease, background-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  }
+
+  button:focus-visible,
+  input:focus-visible {
+    outline: 2px solid #7db4ff;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: rgba(91, 141, 239, 0.35);
+    color: #ffffff;
+  }
+}
+
+.app-shell {
+  background: transparent;
+}
+
+.app-sidebar {
+  background: rgba(8, 13, 21, 0.9) !important;
+  box-shadow: 18px 0 50px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(18px);
+}
+
+.app-content {
+  position: relative;
+}
+
+.app-header {
+  border-color: rgba(101, 119, 148, 0.22) !important;
+  background: rgba(12, 18, 28, 0.52);
+  border-radius: 16px;
+  padding: 12px 14px 14px;
+}
+
+.chat-context {
+  border: 1px solid rgba(101, 119, 148, 0.14);
+  border-radius: 12px;
+  background: rgba(20, 28, 40, 0.5);
+  padding: 9px 12px;
+}
+
+.empty-state {
+  position: relative;
+  min-height: 120px;
+  border: 1px dashed rgba(125, 180, 255, 0.18);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(24, 38, 62, 0.45), rgba(16, 22, 32, 0.18));
+  overflow: hidden;
+}
+
+.empty-state::after {
+  position: absolute;
+  right: 8%;
+  top: 18%;
+  width: 120px;
+  height: 120px;
+  border: 1px solid rgba(125, 180, 255, 0.1);
+  border-radius: 50%;
+  content: "";
+  box-shadow: 0 0 0 20px rgba(125, 180, 255, 0.025), 0 0 0 40px rgba(125, 180, 255, 0.018);
+}
+
+.model-selector {
+  border-color: rgba(101, 119, 148, 0.22) !important;
+  padding-top: 14px !important;
+}
+
+.composer {
+  border: 1px solid rgba(101, 119, 148, 0.24);
+  border-radius: 18px;
+  background: rgba(14, 20, 30, 0.88);
+  padding: 8px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.15);
+  backdrop-filter: blur(14px);
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    padding: 10px 11px 12px;
+  }
+
+  .empty-state {
+    min-height: 110px;
+  }
+
+  .composer {
+    border-radius: 15px;
+    padding: 7px;
   }
 }
