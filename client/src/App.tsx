@@ -70,7 +70,7 @@ function validMessage(m: unknown): m is ChatMessage {
   const modelOk =
     msg.model === undefined ||
     msg.model === "text" ||
-    msg.model === "flash" ||
+    msg.model === "audio" ||
     msg.model === "image";
   const imageUrlOk =
     msg.imageUrl === undefined || typeof msg.imageUrl === "string";
@@ -206,7 +206,6 @@ function loadStore(): StoreShape {
           ? parsed.activeId
           : parsed.conversations[0]?.id ?? null;
       if (parsed.conversations.length === 0) return defaultStore();
-      // Remove the old, persistent welcome bubble from saved conversations.
       const conversations = parsed.conversations.map((conversation) => ({
         ...conversation,
         messages: conversation.messages.filter(
@@ -228,8 +227,6 @@ function loadStore(): StoreShape {
 function saveStore(store: StoreShape) {
   try {
     if (typeof localStorage === "undefined") return;
-    // Strip audioUrl (base64 data URIs) before saving — they are transient.
-    // AudioMessage shows "expired" state on reload, prompting the user to resend.
     const stripped: StoreShape = {
       ...store,
       conversations: store.conversations.map((c) => ({
@@ -514,11 +511,7 @@ export default function App() {
     });
   }
 
-  /**
-   * Finalises a Flash audio message.
-   * Stores the prompt text as content (for localStorage) and the data URI
-   * as audioUrl (in-memory only — stripped from localStorage by saveStore).
-   */
+
   function finalizeAudioMessage(msgId: string, audio: AudioResponse) {
     setStore((prev) => {
       if (!prev.activeId) return prev;
@@ -740,7 +733,7 @@ export default function App() {
     setError(null);
 
     const userMsgType: MessageType =
-      modelId === "image" ? "text" : modelId === "flash" ? "text" : "text";
+      modelId === "image" ? "text" : modelId === "audio" ? "text" : "text";
 
     const userMessage: ChatMessage = {
       id: uid(),
@@ -755,7 +748,7 @@ export default function App() {
     const assistantSeed: ChatMessage = {
       id: assistantStreamId,
       role: "assistant",
-      type: modelId === "image" ? "image" : modelId === "flash" ? "audio" : "text",
+      type: modelId === "image" ? "image" : modelId === "audio" ? "audio" : "text",
       model: modelId,
       content: "",
     };
@@ -831,7 +824,7 @@ export default function App() {
         // Text model reply — finalise normally
         finalizeMessage(assistantStreamId, reply);
 
-        if (speakReplies && reply && modelId !== "image" && modelId !== "flash") {
+        if (speakReplies && reply && modelId !== "image" && modelId !== "audio") {
           const plain = reply
             .replace(/```[\s\S]*?```/g, (block) =>
               block.replace(/\n/g, ". ")
@@ -1181,7 +1174,7 @@ export default function App() {
                       <AudioMessage
                         audioUrl={message.audioUrl}
                         prompt={message.prompt ?? message.content}
-                        onRegenerate={(text) => void submit(text, [], "flash")}
+                        onRegenerate={(text) => void submit(text, [], "audio")}
                       />
                     )
                   ) : message.role === "assistant" ? (

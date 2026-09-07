@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { isSupportedModelId, getModelConfig } from "../config/models.js";
 import type { ModelId } from "../types.js";
 import { streamTextChat } from "./text.service.js";
-import { handleFlashChat } from "./flash.service.js";
+import { handleFishAudioChat } from "./audio.service.js";
 import { handleImageGenerate } from "./image.service.js";
 
 export async function routeChat(model: unknown, req: Request, res: Response): Promise<void> {
@@ -24,8 +24,8 @@ export async function routeChat(model: unknown, req: Request, res: Response): Pr
     case "text":
       await streamTextChat({ messages, res });
       return;
-    case "flash":
-      await handleFlashChat({ messages, res });
+    case "audio":
+      await handleFishAudioChat({ messages, res });
       return;
     case "image":
       await handleImageGenerate({

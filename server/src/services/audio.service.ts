@@ -3,7 +3,7 @@ import { isApiKeyConfigured } from "../llm.js";
 import { getModelConfig } from "../config/models.js";
 import type { ChatMessage } from "../types.js";
 
-export type FlashChatArgs = {
+export type FishAudioChatArgs = {
   messages: ChatMessage[];
   res: Response;
 };
@@ -22,7 +22,7 @@ function extractUserText(messages: ChatMessage[]): string {
   return "";
 }
 
-export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise<void> {
+export async function handleFishAudioChat({ messages, res }: FishAudioChatArgs): Promise<void> {
   // --- Config checks ---
   if (!isApiKeyConfigured()) {
     res.status(500).json({ error: "OPENROUTER_API_KEY is not configured." });
@@ -31,14 +31,14 @@ export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise
 
   let modelCfg: ReturnType<typeof getModelConfig>;
   try {
-    modelCfg = getModelConfig("flash");
+    modelCfg = getModelConfig("audio");
   } catch {
-    res.status(500).json({ error: "Flash model is not configured. Set FLASH_MODEL in .env." });
+    res.status(500).json({ error: "Fish Audio model is not configured. Set AUDIO_MODEL in .env." });
     return;
   }
 
   if (!modelCfg.model) {
-    res.status(500).json({ error: "Flash model is not configured. Set FLASH_MODEL in .env." });
+    res.status(500).json({ error: "Fish Audio model is not configured. Set AUDIO_MODEL in .env." });
     return;
   }
 
@@ -72,7 +72,7 @@ export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Network error reaching speech provider.";
-    console.error("[flash.service] fetch error:", msg);
+    console.error("[fishAudio.service] fetch error:", msg);
     res.status(502).json({ error: "Failed to reach speech provider. Check your network." });
     return;
   }
@@ -93,7 +93,7 @@ export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise
     } catch {
       /* ignore parse errors */
     }
-    console.error("[flash.service] provider error:", providerMsg);
+    console.error("[fishAudio.service] provider error:", providerMsg);
 
     if (audioResponse.status === 401 || audioResponse.status === 403) {
       res.status(401).json({ error: "Speech provider authentication failed. Check your API key." });
@@ -108,7 +108,7 @@ export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise
   // --- Validate content type ---
   const ct = audioResponse.headers.get("content-type") ?? "";
   if (!ct.includes("audio/")) {
-    console.error("[flash.service] unexpected content-type from provider:", ct);
+    console.error("[fishAudio.service] unexpected content-type from provider:", ct);
     res.status(502).json({ error: "Speech provider returned an unexpected response format." });
     return;
   }
@@ -118,7 +118,7 @@ export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise
   try {
     audioBytes = await (audioResponse as globalThis.Response).arrayBuffer();
   } catch (err) {
-    console.error("[flash.service] failed to read audio bytes:", err);
+    console.error("[fishAudio.service] failed to read audio bytes:", err);
     res.status(502).json({ error: "Failed to read audio data from speech provider." });
     return;
   }
@@ -134,7 +134,7 @@ export async function handleFlashChat({ messages, res }: FlashChatArgs): Promise
   // --- Return normalised response ---
   res.json({
     type: "audio",
-    model: "flash",
+    model: "fish audio",
     format,
     data: base64,
     prompt: text,

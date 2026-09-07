@@ -10,7 +10,7 @@ type Props = {
 
 const modelIcons: Record<ModelId, string> = {
   text: "◌",
-  flash: "〰",
+  audio: "〰",
   image: "▧",
 };
 

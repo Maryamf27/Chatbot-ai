@@ -174,7 +174,7 @@ export async function streamChat(
       height?: number;
     };
 
-    // Flash audio response
+    // Fish audio response
     if (data.type === "audio" && typeof data.data === "string") {
       const mimeType = data.format === "mp3" ? "audio/mpeg" : "audio/wav";
       const dataUri = `data:${mimeType};base64,${data.data}`;

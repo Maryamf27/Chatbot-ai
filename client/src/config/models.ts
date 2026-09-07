@@ -19,7 +19,7 @@ export const MODELS: AppModel[] = [
     supportsAttachments: true,
   },
   {
-    id: "flash",
+    id: "audio",
     name: "Fish Audio",
     type: "audio",
     placeholder: "Ask or speak…",

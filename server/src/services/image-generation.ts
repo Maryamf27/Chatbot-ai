@@ -86,14 +86,9 @@ function hasExplicitStyle(prompt: string): boolean {
   ]);
 }
 
-// Always appended, regardless of category: keeps output sharp and stops the
-// subject from being cropped by the top/edges of the frame.
 const QUALITY_BOOST =
   "ultra sharp focus, crisp fine details, extremely high resolution, 8k uhd quality, professional photography, perfectly in focus, no blur, no motion blur, no grain, no jpeg artifacts, no distortion";
 
-// Always appended for any image of a person: biases generation toward
-// modest, fully-clothed depictions on top of the provider-side "safe"
-// content filter, rather than relying on the filter alone.
 const MODESTY_GUARD =
   "fully clothed in tasteful, modest, professional attire appropriate for all audiences, no exposed skin beyond face, hands, and forearms, family-friendly, no suggestive or revealing clothing";
 
@@ -162,8 +157,6 @@ function dimensionsFor(
               ? "landscape"
               : "square";
 
-  // Base sizes (px). "high" quality scales these up for a sharper, more
-  // detailed result while keeping the aspect ratio intact.
   const base: Record<"portrait" | "wide" | "landscape" | "square", { width: number; height: number }> = {
     portrait: { width: 1024, height: 1536 },
     wide: { width: 1536, height: 864 },
@@ -245,16 +238,8 @@ export function buildPollinationsUrl(prompt: string, profile: ImageProfile): str
     width: String(profile.width),
     height: String(profile.height),
     nologo: "true",
-    // We already craft a fully-enhanced prompt ourselves (see
-    // enhanceImagePrompt); letting the provider "enhance" it again on top
-    // tends to rewrite the framing and is what was causing subjects to get
-    // cropped at the top of the image.
     enhance: "false",
     nofeed: "true",
-    // Pollinations' own content filter — off by default. "nsfw" enables
-    // both the sexual- and violence-content checks; the provider returns
-    // an error instead of an image when it trips, which the frontend
-    // already treats as a failed load and falls back to the next model.
     safe: "nsfw",
     seed: String(Math.floor(Math.random() * 1_000_000_000)),
   });
@@ -273,11 +258,6 @@ export type ImageModelOption = {
   description: string;
 };
 
-// Curated, user-facing catalog for the model picker. These are the same
-// models already referenced in modelPreferences above, just with friendly
-// labels/descriptions. Kept separate from the live Pollinations catalog
-// fetch (getAvailableImageModels) so the picker UI stays stable even if
-// that catalog is briefly unreachable.
 export const IMAGE_MODEL_CATALOG: ImageModelOption[] = [
   { id: "flux", label: "Flux", description: "Fast, reliable, good all-round default" },
   { id: "gpt-image-2", label: "GPT Image 2", description: "Strong portraits, product shots, and text accuracy" },

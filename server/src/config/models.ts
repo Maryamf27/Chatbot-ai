@@ -17,9 +17,9 @@ export const AI_MODELS: Record<ModelId, AiModelConfig> = {
       "google/gemma-4-26b-a4b-it:free",
     type: "text",
   },
-  flash: {
+  audio: {
     provider: "openrouter",
-    model: process.env.FLASH_MODEL ?? "",
+    model: process.env.AUDIO_MODEL ?? "",
     type: "audio",
   },
   image: {
