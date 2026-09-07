@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import ReactMarkdown from "react-markdown";
+import { AlertTriangle, KeyRound, ServerCrash, Square } from "lucide-react";
+import { toast } from "sonner";
 import {
   fetchHealth,
   streamChat,
@@ -13,9 +14,31 @@ import { listenOnce, speakText, stopSpeaking } from "./speech";
 import type { ChatMessage, Conversation, ModelId, MessageType } from "./types";
 import { getModelById, DEFAULT_MODEL_ID } from "./config/models";
 import { ModelSelector } from "./components/ModelSelector";
-import { ImageMessage } from "./components/ImageMessage";
 import { ImageOptionsBar } from "./components/ImageOptionsBar";
-import { AudioMessage } from "./components/AudioMessage";
+import { ChatSidebar } from "./components/ChatSidebar";
+import { ChatHeader } from "./components/ChatHeader";
+import { Composer } from "./components/Composer";
+import { EmptyState } from "./components/EmptyState";
+import { MessageRow } from "./components/MessageRow";
+import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 const STORE_KEY = "ling-store:v2";
 const PREFS_KEY = "ling-prefs:v1";
@@ -24,32 +47,6 @@ const MAX_MSGS_PER_CONVO = 80;
 
 function uid() {
   return crypto.randomUUID();
-}
-
-function PaperclipIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
-      <path d="m21.4 11.6-8.8 8.8a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />
-    </svg>
-  );
-}
-
-function MicIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
-      <rect x="9" y="2.5" width="6" height="11" rx="3" />
-      <path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3.5M8.5 21.5h7" />
-    </svg>
-  );
-}
-
-function SidebarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="h-5 w-5" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
-      <rect x="3" y="4" width="18" height="16" rx="2.5" />
-      <path d="M9 4v16M6 8h1M6 12h1M6 16h1" />
-    </svg>
-  );
 }
 
 function validMessage(m: unknown): m is ChatMessage {
@@ -329,8 +326,6 @@ export default function App() {
   const [shareCopied, setShareCopied] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const composerRef = useRef<HTMLFormElement>(null);
 
   const chatAbortRef = useRef<AbortController | null>(null);
   const healthAbortRef = useRef<AbortController | null>(null);
@@ -579,6 +574,7 @@ export default function App() {
 
   const handlePaste = useCallback((e: ClipboardEvent) => {
     if (!e.clipboardData) return;
+    if (!getModelById(selectedModel).supportsAttachments) return;
     const items = e.clipboardData.items;
     const files: File[] = [];
     for (let i = 0; i < items.length; i++) {
@@ -592,7 +588,7 @@ export default function App() {
       e.preventDefault();
       void handleFiles(files);
     }
-  }, []);
+  }, [selectedModel]);
 
   useEffect(() => {
     window.addEventListener("paste", handlePaste);
@@ -643,8 +639,12 @@ export default function App() {
   }
 
   function toggleSidebar() {
-    setSidebarOpen((open) => !open);
     setSidebarCollapsed((collapsed) => !collapsed);
+  }
+
+  /** Cancels an in-flight reply; the stream's abort path cleans up the placeholder. */
+  function stopGeneration() {
+    abortChat();
   }
 
   function createShareUrl() {
@@ -658,7 +658,9 @@ export default function App() {
     if (!shareUrl) return;
     try {
       await navigator.clipboard.writeText(shareUrl);
+      toast.success("Share link copied to your clipboard");
     } catch {
+      toast.error("Couldn't copy automatically — select the link and copy it");
       /* The URL remains visible for manual copying when clipboard access is blocked. */
     }
     setShareCopied(true);
@@ -923,547 +925,261 @@ export default function App() {
   const serverOk = health?.ok;
   const keyOk = health?.apiKeyConfigured;
 
+  const activeModel = getModelById(selectedModel);
+  const hasMessages = messages.length > 0;
+  const statusTone: "ok" | "warn" | "down" = !health
+    ? "warn"
+    : !serverOk
+      ? "down"
+      : !keyOk
+        ? "warn"
+        : "ok";
+  const statusLabel = !health
+    ? "Connecting…"
+    : !serverOk
+      ? "Server offline"
+      : !keyOk
+        ? "API key missing"
+        : "Connected";
+
   return (
-    <div className="app-shell relative flex min-h-screen w-full bg-[#0f141c] text-[#e8eef8]">
+    <div className="relative flex min-h-dvh w-full">
+      <div className="app-aurora" aria-hidden="true" />
+
       {sidebarOpen ? (
         <div
-          className="fixed inset-0 z-18 bg-black/45 xl:hidden"
+          className="fixed inset-0 z-20 bg-background/70 backdrop-blur-sm xl:hidden"
           onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       ) : null}
 
-      <aside className={`app-sidebar fixed left-0 top-0 z-20 flex h-dvh w-[84%] max-w-[320px] flex-col overflow-hidden border-r border-[#1b2431] bg-[#0b0f15] transition-all xl:sticky xl:max-w-none xl:translate-x-0 ${sidebarOpen ? "translate-x-0" : "translate-x-[-102%]"} ${sidebarCollapsed ? "xl:w-18" : "xl:w-70"}`}>
-        <div className={`hidden h-full flex-col items-center gap-3 border-r border-[#1b2431] p-3 ${sidebarCollapsed ? "xl:flex" : "xl:hidden"}`}>
-          <button
-            type="button"
-            className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-[#252525] text-[#f2f4f7] hover:bg-[#30343c]"
-            onClick={toggleSidebar}
-            aria-label="Open chat history"
-            title="Open chat history"
-          >
-            <SidebarIcon />
-          </button>
-          <button
-            type="button"
-            className="inline-flex h-12 w-12 items-center justify-center rounded-xl text-2xl text-[#f2f4f7] hover:bg-[#1b2027]"
-            onClick={createNewChat}
-            aria-label="New chat"
-            title="New chat"
-          >
-            ＋
-          </button>
-        </div>
-        <div className={`flex h-full flex-col gap-3 p-3 ${sidebarCollapsed ? "xl:hidden" : ""}`}>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-[#1b2431] bg-[#121822] text-[#dbe9ff] hover:border-[#2a3648] hover:bg-[#18202e]"
-              onClick={toggleSidebar}
-              aria-label="Close chat history"
-              title="Close chat history"
-            >
-              <SidebarIcon />
-            </button>
-            <button
-              type="button"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-[10px] border border-[#1b2431] bg-[#121822] px-3 py-2.5 text-sm font-medium transition hover:border-[#2a3648] hover:bg-[#18202e]"
-              onClick={createNewChat}
-            >
-              <span className="text-lg leading-none text-[#7db4ff]">＋</span>
-              New chat
-            </button>
-            {/* <button
-              type="button"
-              className="rounded-lg border border-[#1b2431] bg-transparent px-2.5 py-2 text-[#9aa8bd] xl:hidden"
-              onClick={() => setSidebarOpen(false)}
-              aria-label="Close sidebar"
-            >
-              ✕
-            </button> */}
-          </div>
+      <ChatSidebar
+        groups={grouped}
+        activeId={activeId}
+        open={sidebarOpen}
+        collapsed={sidebarCollapsed}
+        statusLabel={statusLabel}
+        statusTone={statusTone}
+        onSelect={switchConversation}
+        onNewChat={createNewChat}
+        onDelete={requestDeleteConversation}
+        onToggleCollapsed={toggleSidebar}
+        onCloseMobile={() => setSidebarOpen(false)}
+      />
 
-          <nav className="flex flex-1 flex-col gap-3.5 overflow-y-auto pr-0.5">
-            {grouped.length === 0 ? (
-              <p className="m-0 p-3 text-sm text-[#6b7b92]">No chats yet.</p>
-            ) : (
-              grouped.map(([label, list]) => (
-                <section key={label}>
-                  <h4 className="mb-1.5 ml-2 text-xs font-semibold uppercase tracking-wide text-[#6b7b92]">{label}</h4>
-                  <ul className="m-0 flex list-none flex-col gap-0 p-0">
-                    {list.map((c) => (
-                      <li key={c.id} className="group relative">
-                        <button
-                          type="button"
-                          className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 pr-10 text-left text-sm text-[#e4e7ec] transition hover:bg-[#17202c] ${c.id === activeId ? "border-[#315fce]/45 bg-[#182942]" : "border-transparent"}`}
-                          onClick={() => switchConversation(c.id)}
-                          title={c.title}
-                        >
-                          <span className="min-w-0 flex-1 truncate">{c.title}</span>
-                        </button>
-                        <button
-                          type="button"
-                          className="absolute right-1.5 top-1/2 z-10 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-base leading-none text-[#98a2b3] opacity-80 transition hover:bg-red-400/15 hover:text-[#ff8589] focus:opacity-100"
-                          onClick={(e) => requestDeleteConversation(c.id, e)}
-                          title="Delete chat"
-                          aria-label={`Delete ${c.title}`}
-                        >
-                          🗑
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              ))
-            )}
-          </nav>
-
-          <div className="border-t border-[#1b2431] pt-2">
-            <label className="flex items-center gap-2 p-2 text-sm text-[#98a2b3]">
-              <input
-                type="checkbox"
-                checked={speakReplies}
-                onChange={(e) => {
-                  setSpeakReplies(e.target.checked);
-                  if (!e.target.checked) stopReplySpeech();
-                }}
-              />
-              Speak replies
-            </label>
-          </div>
-        </div>
-      </aside>
-
-      <main className="app-content min-w-0 flex-1 bg-[#0f141c]">
-        <div className="mx-auto flex h-dvh min-h-screen w-full max-w-270 flex-col gap-2.5 px-5 py-4.5 max-[640px]:px-2.5 max-[820px]:px-3.5">
-          <header className="app-header flex items-center justify-between gap-3 border-b border-[#252a32] px-0.5 pb-3.5 pt-1 max-[640px]:flex-wrap">
-            <div className="flex items-center gap-2 xl:hidden">
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#252a32] bg-[#161a20] text-base text-[#c6d4e8] hover:bg-[#1b2027]"
-              onClick={toggleSidebar}
-              aria-label="Toggle sidebar"
-              title="Toggle sidebar"
-            >
-              ☰
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-[#252a32] bg-[#161a20] text-xl text-[#7db4ff] hover:bg-[#1b2027]"
-              onClick={createNewChat}
-              aria-label="New chat"
-              title="New chat"
-            >
-              ＋
-            </button>
-            </div>
-            <div className="flex shrink-0 items-center gap-2.5 max-[640px]:ml-auto">
-              <button
-                type="button"
-                className="rounded-lg border border-[#2a313b] bg-transparent px-3 py-2 text-xs font-semibold text-[#98a2b3] hover:bg-[#1b2027]"
-                onClick={createShareUrl}
-                disabled={!active || messages.length === 0}
-                title="Share this chat"
-              >
-                Share
-              </button>
-              <button
-                type="button"
-                className="rounded-lg border border-[#2a313b] bg-transparent px-3 py-2 text-xs font-semibold text-[#98a2b3] hover:bg-[#1b2027]"
-                onClick={requestClearActiveMessages}
-                disabled={busy || recording}
-                title="Clear messages in this chat"
-              >
-                Clear chat
-              </button>
-            </div>
-          </header>
+      <main className="relative z-10 flex min-w-0 flex-1 flex-col">
+        <div className="flex h-dvh w-full flex-col px-4 pt-3 pb-4 sm:px-6 lg:px-8 xl:px-12">
+          <ChatHeader
+            title={active?.title ?? "New chat"}
+            model={activeModel}
+            hasMessages={hasMessages}
+            busy={busy || recording}
+            speakReplies={speakReplies}
+            onSpeakRepliesChange={(value) => {
+              setSpeakReplies(value);
+              if (!value) stopReplySpeech();
+            }}
+            onOpenSidebar={() => setSidebarOpen(true)}
+            onNewChat={createNewChat}
+            onShare={createShareUrl}
+            onClearChat={requestClearActiveMessages}
+          />
 
           {health && serverOk && !keyOk ? (
-            <div className="rounded-xl border border-[#344e7a] bg-[#161f2d] p-4 text-sm leading-relaxed text-[#e4e7ec]">
-              <strong className="mb-2 block">🔧 Setup your API key to chat with the model.</strong>
-              <ol className="my-2 list-decimal space-y-1 pl-5">
-                <li>
-                  Go to{" "}
-                  <a
-                    href="https://openrouter.ai/keys"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    openrouter.ai/keys
-                  </a>{" "}
-                  (free sign up)
-                </li>
-                <li>
-                  Create a key and copy it (starts with <code>sk-or-v1-...</code>)
-                </li>
-                <li>
-                  Paste it into <code>.env</code> as{" "}
-                  <code>OPENROUTER_API_KEY=...</code>
-                </li>
-                <li>Restart the terminal command and refresh this page</li>
-              </ol>
-              <p className="mt-2 text-sm text-[#98a2b3]">
-                Once set up, ask anything, paste/upload images, or use the mic —
-                I'll reply with clean formatting.
-              </p>
+            <div className="mt-3 flex gap-3 rounded-2xl border border-chart-3/30 bg-chart-3/5 p-4 text-sm leading-relaxed">
+              <KeyRound className="mt-0.5 size-5 shrink-0 text-chart-3" />
+              <div className="min-w-0">
+                <strong className="block font-semibold">Add an API key to start chatting</strong>
+                <ol className="mt-2 mb-0 list-decimal space-y-1 pl-5 text-muted-foreground">
+                  <li>
+                    Create a free key at{" "}
+                    <a
+                      className="font-medium text-primary underline underline-offset-2"
+                      href="https://openrouter.ai/keys"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      openrouter.ai/keys
+                    </a>
+                  </li>
+                  <li>
+                    Copy it — it starts with{" "}
+                    <code className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-xs">sk-or-v1-…</code>
+                  </li>
+                  <li>
+                    Paste it into <code className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-xs">.env</code>{" "}
+                    as <code className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-xs">OPENROUTER_API_KEY</code>
+                  </li>
+                  <li>Restart the dev server and refresh this page</li>
+                </ol>
+              </div>
             </div>
           ) : null}
 
           {health && !serverOk ? (
-            <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-4 text-sm leading-relaxed text-[#e4e7ec]">
-              <strong>⚠️ Server is not reachable.</strong>
-              <p>
-                Make sure you ran <code className="rounded bg-[#0b0f15] px-1.5 py-0.5 text-xs">npm run dev</code> from the project root.
-                The server should listen on port 3001.
-              </p>
+            <div className="mt-3 flex gap-3 rounded-2xl border border-destructive/30 bg-destructive/5 p-4 text-sm leading-relaxed">
+              <ServerCrash className="mt-0.5 size-5 shrink-0 text-destructive" />
+              <div className="min-w-0">
+                <strong className="block font-semibold">Server is not reachable</strong>
+                <p className="mt-1 mb-0 text-muted-foreground">
+                  Run <code className="rounded bg-background/70 px-1.5 py-0.5 font-mono text-xs">npm run dev</code> from
+                  the project root — the API should listen on port 3001.
+                </p>
+              </div>
             </div>
           ) : null}
 
           <div
-            className={`flex flex-col gap-2.5 py-2.5 pr-3 scrollbar-gutter-stable ${messages.length === 0 ? "min-h-30 flex-none overflow-visible" : "min-h-0 flex-1 overflow-y-auto"}`}
             ref={listRef}
+            className="scroll-slim -mx-1 flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-1 py-6"
           >
-            {messages.length === 0 ? (
-              <div className="empty-state flex flex-1 flex-col items-center justify-center p-6 text-center text-[#98a2b3]" aria-live="polite">
-                <h2 className="m-0 text-2xl font-semibold tracking-tight">Hi, how can I help?</h2>
-              </div>
-            ) : null}
-            {messages.map((message) => {
-              const msgType: MessageType = message.type ?? "text";
-              return (
-                <article
+            {hasMessages ? (
+              messages.map((message) => (
+                <MessageRow
                   key={message.id}
-                  className={`relative flex shrink-0 max-w-[86%] flex-col gap-2 overflow-hidden wrap-break-word rounded-[14px] px-3.5 py-3 leading-relaxed max-[640px]:max-w-[94%] ${message.role === "user" ? "self-end bg-[#315fce] text-white" : "self-start bg-[#161a20] text-[#e4e7ec]"} ${
-                    message.id === streamingId &&
-                    !message.content &&
-                    (msgType === "text" || msgType === "audio")
-                      ? "min-h-11 justify-center"
-                      : ""
-                  }`}
-                >
-                  {message.images && message.images.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {message.images.map((url, i) => (
-                        <img
-                          key={i}
-                          src={url}
-                          alt="Uploaded"
-                          className="max-h-70 max-w-60 rounded-lg object-cover max-[640px]:max-h-40 max-[640px]:max-w-40"
-                        />
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {msgType === "image" ? (
-                    <ImageMessage
-                      imageUrl={message.imageUrl ?? ""}
-                      fallbackUrls={message.imageFallbackUrls}
-                      prompt={message.prompt}
-                      model={message.model}
-                      width={message.imageWidth}
-                      height={message.imageHeight}
-                    />
-                  ) : msgType === "audio" ? (
-                    message.id === streamingId && !message.content ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff]" />
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:150ms]" />
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:300ms]" />
-                      </span>
-                    ) : (
-                      <AudioMessage
-                        audioUrl={message.audioUrl}
-                        prompt={message.prompt ?? message.content}
-                        onRegenerate={(text) => void submit(text, [], "audio")}
-                      />
-                    )
-                  ) : message.role === "assistant" ? (
-                    message.content ? (
-                      <ReactMarkdown
-                        components={{
-                          pre: ({ children }) => (
-                            <pre className="my-2 overflow-x-auto rounded-lg bg-[#0b0f15] p-3 text-sm">{children}</pre>
-                          ),
-                          code: ({ className, children }) => {
-                            const isBlock = className?.includes("language-");
-                            return (
-                              <code
-                                className={
-                                  isBlock
-                                    ? "block"
-                                    : "rounded bg-[#0b0f15] px-1.5 py-0.5 text-[.88em]"
-                                }
-                              >
-                                {children}
-                              </code>
-                            );
-                          },
-                          p: ({ children }) => <p className="m-0">{children}</p>,
-                          h1: ({ children }) => <h2 className="mb-2 mt-3 text-xl font-bold first:mt-0">{children}</h2>,
-                          h2: ({ children }) => <h3 className="mb-2 mt-3 text-lg font-bold first:mt-0">{children}</h3>,
-                          h3: ({ children }) => <h4 className="mb-2 mt-3 font-bold first:mt-0">{children}</h4>,
-                          ul: ({ children }) => (
-                            <ul className="my-2 list-disc space-y-1 pl-5">{children}</ul>
-                          ),
-                          ol: ({ children }) => (
-                            <ol className="my-2 list-decimal space-y-1 pl-5">{children}</ol>
-                          ),
-                          li: ({ children }) => <li>{children}</li>,
-                          strong: ({ children }) => (
-                            <strong className="font-bold text-white">{children}</strong>
-                          ),
-                          a: ({ href, children }) => (
-                            <a
-                              className="text-[#7db4ff] underline hover:text-[#a7c2ff]"
-                              href={href}
-                              target="_blank"
-                              rel="noreferrer"
-                            >
-                              {children}
-                            </a>
-                          ),
-                          blockquote: ({ children }) => (
-                            <blockquote className="my-2 border-l-2 border-[#344e7a] bg-[#1a273d] px-3 py-1.5 italic text-[#98a2b3]">{children}</blockquote>
-                          ),
-                          hr: () => <hr className="my-3 border-0 border-t border-[#252a32]" />,
-                        }}
-                      >
-                        {message.content}
-                      </ReactMarkdown>
-                    ) : message.id === streamingId ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff]" />
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:150ms]" />
-                        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:300ms]" />
-                      </span>
-                    ) : null
-                  ) : message.content ? (
-                    <p>{message.content}</p>
-                  ) : null}
-
-                  {msgType === "text" &&
-                  message.id === streamingId &&
-                  message.content ? (
-                    <span className="ml-0.5 inline-block h-[1.1em] w-1 animate-pulse align-bottom bg-[#7db4ff]" aria-hidden="true" />
-                  ) : null}
-                </article>
-              );
-            })}
+                  message={message}
+                  isStreaming={message.id === streamingId}
+                  onRegenerateAudio={(text) => void submit(text, [], "audio")}
+                />
+              ))
+            ) : (
+              <EmptyState model={activeModel} onPick={(prompt) => setInput(prompt)} />
+            )}
           </div>
 
-          {error ? <p className="m-0 text-sm text-[#f97068]">{error}</p> : null}
+          <div className="flex flex-col gap-2.5">
+            {error ? (
+              <div
+                className="flex items-center gap-2 rounded-xl border border-destructive/30 bg-destructive/10 px-3.5 py-2.5 text-sm text-destructive"
+                role="alert"
+              >
+                <AlertTriangle className="size-4 shrink-0" />
+                <span className="min-w-0 flex-1">{error}</span>
+                <Button variant="ghost" size="xs" className="text-destructive" onClick={() => setError(null)}>
+                  Dismiss
+                </Button>
+              </div>
+            ) : null}
 
-          {isSpeaking ? (
-            <button
-              type="button"
-              className="self-start border border-red-400/50 bg-red-400/10 px-2.5 py-1.5 text-sm text-[#fca5a0]"
-              onClick={stopReplySpeech}
-            >
-              Stop speaking
-            </button>
-          ) : null}
+            {isSpeaking ? (
+              <Button variant="destructive" size="sm" className="gap-1.5 self-start" onClick={stopReplySpeech}>
+                <Square className="fill-current" />
+                Stop speaking
+              </Button>
+            ) : null}
 
-          <ModelSelector
-            selectedId={selectedModel}
-            onChange={setSelectedModel}
-            disabled={busy || recording}
-          />
-
-          {selectedModel === "image" ? (
-            <ImageOptionsBar
-              value={imageOptions}
-              onChange={setImageOptions}
+            <ModelSelector
+              selectedId={selectedModel}
+              onChange={setSelectedModel}
               disabled={busy || recording}
             />
-          ) : null}
 
-          <form
-            className="composer flex items-end gap-0 max-[640px]:flex-wrap"
-            ref={composerRef}
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submit(input, pendingImages);
-            }}
-          >
-            <input
-              type="file"
-              ref={fileInputRef}
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              onChange={(e) => {
-                if (e.target.files) void handleFiles(e.target.files);
-                e.target.value = "";
-              }}
-            />
-            <button
-              type="button"
-              className="order-1 inline-flex h-10 w-10 shrink-0 items-center justify-center border-0 bg-transparent p-0 text-[#98a2b3] hover:bg-[#252d3a] hover:text-[#dbe9ff]"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={busy || recording || !getModelById(selectedModel).supportsAttachments}
-              title="Attach image"
-              aria-label="Attach image"
-            >
-              <PaperclipIcon />
-            </button>
-            <button
-              type="button"
-              className={`order-3 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-0 p-0 ${recording ? "bg-red-400/15 text-[#f97068]" : "bg-transparent text-[#98a2b3] hover:bg-[#252d3a] hover:text-[#dbe9ff]"}`}
-              onClick={() => void toggleMic()}
-              disabled={busy || recording}
-              aria-label={recording ? "Listening" : "Use microphone"}
-              title={recording ? "Listening" : "Use microphone"}
-            >
-              <MicIcon />
-            </button>
-            <div className="order-2 flex min-w-0 flex-1 flex-col gap-1.5">
-              {pendingImages.length > 0 ? (
-                <div className="flex flex-wrap gap-2 rounded-lg border border-[#2a313b] bg-[#15191e] p-1.5">
-                  {pendingImages.map((url, i) => (
-                    <div key={i} className="relative h-16 w-16 overflow-hidden rounded-lg border border-[#2a313b]">
-                      <img src={url} alt="" className="h-full w-full object-cover" />
-                      <button
-                        type="button"
-                        className="absolute right-0.5 top-0.5 min-w-0 rounded-md border-0 bg-black/65 px-1.5 py-px text-xs text-white hover:bg-[#f97068]"
-                        onClick={() => removePendingImage(i)}
-                        aria-label="Remove image"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-              <input
-                type="text"
-                className="w-full border-0 bg-transparent px-2 py-2.5 text-[#f2f4f7] placeholder:text-[#667085] focus:outline-none focus:ring-0"
-                value={input}
-                onChange={(event) => setInput(event.target.value)}
-                placeholder={
-                  recording
-                    ? "Listening…"
-                    : pendingImages.length > 0
-                    ? "Add a message (or send image only)…"
-                    : getModelById(selectedModel).placeholder
-                }
+            {selectedModel === "image" ? (
+              <ImageOptionsBar
+                value={imageOptions}
+                onChange={setImageOptions}
                 disabled={busy || recording}
               />
-            </div>
-            <button type="submit" className="order-4 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#5b8def] p-0 text-lg font-semibold text-white hover:bg-[#6b9bff] max-[640px]:w-10" disabled={busy || recording} aria-label="Send message" title="Send message">
-              ↑
-            </button>
-          </form>
+            ) : null}
+
+            <Composer
+              value={input}
+              onChange={setInput}
+              onSubmit={() => void submit(input, pendingImages)}
+              onFiles={(files) => void handleFiles(files)}
+              pendingImages={pendingImages}
+              onRemoveImage={removePendingImage}
+              placeholder={
+                pendingImages.length > 0
+                  ? "Add a message, or send the image on its own…"
+                  : activeModel.placeholder
+              }
+              supportsAttachments={activeModel.supportsAttachments}
+              busy={busy}
+              recording={recording}
+              onToggleMic={() => void toggleMic()}
+              onStop={stopGeneration}
+            />
+
+            <p className="m-0 text-center text-[11px] text-muted-foreground/80">
+              Press <kbd className="rounded border border-border/70 px-1 font-sans">Enter</kbd> to send,{" "}
+              <kbd className="rounded border border-border/70 px-1 font-sans">Shift</kbd> +{" "}
+              <kbd className="rounded border border-border/70 px-1 font-sans">Enter</kbd> for a new line. AI can make
+              mistakes — double-check important details.
+            </p>
+          </div>
         </div>
       </main>
 
-      {pendingDeleteId || pendingClearChat ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070b]/75 px-4 backdrop-blur-[2px]"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) {
-              setPendingDeleteId(null);
-              setPendingClearChat(false);
-            }
-          }}
-        >
-          <div
-            className="w-full max-w-140 rounded-xl border border-[#252f3d] bg-[#111821] p-6 text-[#e8eef8] shadow-[0_22px_70px_rgba(0,0,0,.45)] max-[640px]:p-5"
-            role="alertdialog"
-            aria-modal="true"
-            aria-labelledby="chat-action-title"
-            aria-describedby="chat-action-description"
-          >
-            <div className="flex items-start gap-5 max-[640px]:gap-3.5">
-              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-2 border-[#667085]/45 text-3xl text-[#d0d5dd] max-[640px]:h-13 max-[640px]:w-13 max-[640px]:text-2xl" aria-hidden="true">
-                △
-              </div>
-              <div className="min-w-0 flex-1 pt-0.5">
-                <h2 id="chat-action-title" className="m-0 text-xl font-bold text-white">Warning!</h2>
-                <p id="chat-action-description" className="mt-2 text-base leading-relaxed text-[#98a2b3]">
-                  {pendingClearChat ? "You will lose all messages in this chat." : "You will lose all of your data by deleting this chat."}<br />
-                  This action cannot be undone.
-                </p>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end gap-2.5">
-              <button
-                type="button"
-                className="rounded-lg bg-[#2a323e] px-4 py-2.5 text-sm font-semibold text-[#e4e7ec] transition hover:bg-[#354050] focus:outline-none focus:ring-2 focus:ring-[#7db4ff]/50"
-                onClick={() => {
-                  setPendingDeleteId(null);
-                  setPendingClearChat(false);
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="rounded-lg bg-[#ffb8ba] px-4 py-2.5 text-sm font-bold text-[#a71920] transition hover:bg-[#ffcacc] focus:outline-none focus:ring-2 focus:ring-[#ff8589]/60"
-                onClick={() => {
-                  if (pendingClearChat) {
-                    clearActiveMessages();
-                  } else if (pendingDeleteId) {
-                    deleteConversation(pendingDeleteId);
-                  }
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
+      <AlertDialog
+        open={Boolean(pendingDeleteId) || pendingClearChat}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPendingDeleteId(null);
+            setPendingClearChat(false);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingClearChat ? "Clear this conversation?" : "Delete this chat?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingClearChat
+                ? "Every message in this chat will be removed."
+                : "This chat and all of its messages will be removed."}{" "}
+              This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel
+              onClick={() => {
+                setPendingDeleteId(null);
+                setPendingClearChat(false);
+              }}
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-white hover:bg-destructive/90"
+              onClick={() => {
+                if (pendingClearChat) {
+                  clearActiveMessages();
+                } else if (pendingDeleteId) {
+                  deleteConversation(pendingDeleteId);
+                }
+              }}
+            >
+              {pendingClearChat ? "Clear messages" : "Delete chat"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {shareUrl ? (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-[#05070b]/75 px-4 backdrop-blur-[2px]"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setShareUrl(null);
-          }}
-        >
-          <div
-            className="w-full max-w-140 rounded-xl border border-[#252f3d] bg-[#111821] p-6 text-[#e8eef8] shadow-[0_22px_70px_rgba(0,0,0,.45)] max-[640px]:p-5"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="share-chat-title"
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 id="share-chat-title" className="m-0 text-xl font-bold text-white">Share chat</h2>
-                <p className="mt-2 text-sm leading-relaxed text-[#98a2b3]">
-                  Anyone with this public URL can open a snapshot copy of this conversation.
-                </p>
-              </div>
-              <button
-                type="button"
-                className="h-8 w-8 rounded-lg text-lg text-[#98a2b3] hover:bg-[#1b2027] hover:text-white"
-                onClick={() => setShareUrl(null)}
-                aria-label="Close share dialog"
-              >
-                ×
-              </button>
-            </div>
-            <div className="mt-5 flex gap-2 max-[640px]:flex-col">
-              <input
-                readOnly
-                value={shareUrl}
-                className="min-w-0 flex-1 rounded-lg border border-[#2a313b] bg-[#0d141f] px-3 py-2.5 text-sm text-[#c9d8ee] focus:outline-none"
-                onFocus={(event) => event.currentTarget.select()}
-                aria-label="Public share URL"
-              />
-              <button
-                type="button"
-                className="rounded-lg bg-[#5b8def] px-4 py-2.5 text-sm font-semibold text-white hover:bg-[#6b9bff]"
-                onClick={() => void copyShareUrl()}
-              >
-                {shareCopied ? "Copied!" : "Copy link"}
-              </button>
-            </div>
+      <Dialog open={Boolean(shareUrl)} onOpenChange={(open) => (open ? undefined : setShareUrl(null))}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Share chat</DialogTitle>
+            <DialogDescription>
+              Anyone with this link can open a read-only snapshot of this conversation.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 max-sm:flex-col">
+            <Input
+              readOnly
+              value={shareUrl ?? ""}
+              onFocus={(event) => event.currentTarget.select()}
+              aria-label="Public share URL"
+              className="min-w-0 flex-1 font-mono text-xs"
+            />
+            <Button className="shrink-0" onClick={() => void copyShareUrl()}>
+              {shareCopied ? "Copied!" : "Copy link"}
+            </Button>
           </div>
-        </div>
-      ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

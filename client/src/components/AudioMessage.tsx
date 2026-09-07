@@ -1,4 +1,7 @@
 import { useRef, useState } from "react";
+import { AudioLines, Download, Pause, Play, RotateCcw, VolumeX } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type Props = {
   audioUrl?: string;
@@ -22,22 +25,24 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
 
   if (!audioUrl) {
     return (
-      <div className="grid grid-cols-[auto_1fr] gap-3 rounded-xl border border-[#294c7d] bg-[#121e2e] p-4 text-[#e8eef8]">
-        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#263b59]" aria-hidden="true">🔇</div>
-        <div>
-          <p className="m-0 font-semibold">Audio expired</p>
-          {prompt && onRegenerate ? (
-            <button
-              type="button"
-              className="mt-2 rounded-lg bg-[#2b6cff] px-3 py-2 text-sm text-white"
-              onClick={() => onRegenerate(prompt)}
-            >
-              Regenerate audio
-            </button>
-          ) : null}
-          <p className="m-0 mt-2 text-sm text-[#91a7c3]">
-            {prompt ? `Resend "${prompt}" to regenerate the audio.` : "Resend to regenerate the audio."}
+      <div className="flex w-full max-w-sm gap-3 rounded-2xl border border-border/70 bg-card/80 p-4 backdrop-blur-sm">
+        <span
+          className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground"
+          aria-hidden="true"
+        >
+          <VolumeX className="size-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="m-0 text-sm font-semibold">Audio expired</p>
+          <p className="mt-1 mb-0 text-xs leading-relaxed text-muted-foreground">
+            {prompt ? `Regenerate to hear "${prompt}" again.` : "Regenerate to hear this again."}
           </p>
+          {prompt && onRegenerate ? (
+            <Button size="sm" className="mt-2.5 gap-1.5" onClick={() => onRegenerate(prompt)}>
+              <RotateCcw />
+              Regenerate audio
+            </Button>
+          ) : null}
         </div>
       </div>
     );
@@ -92,7 +97,7 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
   const progressPercent = durationKnown && duration ? (currentTime / duration) * 100 : 0;
 
   return (
-    <div className="w-full max-w-90 rounded-2xl border border-[#294c7d] bg-linear-to-b from-[#152438] to-[#101a29] p-3.5 text-[#e8eef8] shadow-[0_8px_24px_rgba(0,0,0,.25)]">
+    <div className="w-full max-w-sm rounded-2xl border border-border/70 bg-card/80 p-3.5 shadow-sm backdrop-blur-sm">
       <audio
         ref={playerRef}
         src={audioUrl}
@@ -103,7 +108,7 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
           setCurrentTime(
             Number.isFinite(nextDuration) && nextDuration > 0 && nextDuration - nextTime < 0.1
               ? nextDuration
-              : nextTime
+              : nextTime,
           );
         }}
         onPlay={() => setIsPlaying(true)}
@@ -115,34 +120,42 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
           }
         }}
       />
-      <div className="flex items-center gap-2 border-b border-[#29405d] pb-2.5 text-sm font-bold uppercase tracking-wide">
+
+      <div className="flex items-center gap-2 border-b border-border/60 pb-2.5">
         <span
-          className="flex h-5 w-5 items-center justify-center rounded-md bg-linear-to-br from-[#43c7c6] to-[#4787ef] text-xs text-[#07111f]"
+          className="flex size-6 items-center justify-center rounded-lg bg-gradient-to-br from-chart-2 to-primary text-primary-foreground"
           aria-hidden="true"
         >
-          F
+          <AudioLines className="size-3.5" />
         </span>
-        <span>Fish Audio</span>
-        <a
-          href={audioUrl}
-          download
-          className="ml-auto flex h-6 w-6 items-center justify-center rounded-md text-sm normal-case text-[#91a7c3] hover:bg-[#1c2c42] hover:text-[#dbe9ff]"
-          title="Download audio"
-          aria-label="Download audio"
-        >
-          ⬇
-        </a>
+        <span className="text-xs font-semibold tracking-wide uppercase">Fish Audio</span>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                render={<a href={audioUrl} download />}
+                variant="ghost"
+                size="icon-xs"
+                className="ml-auto text-muted-foreground"
+                aria-label="Download audio"
+              />
+            }
+          >
+            <Download />
+          </TooltipTrigger>
+          <TooltipContent>Download</TooltipContent>
+        </Tooltip>
       </div>
+
       <div className="flex items-center gap-3 py-3">
-        <button
-          type="button"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-[#4b92ff] to-[#2962d8] text-sm text-white shadow-[0_4px_12px_rgba(43,108,255,.35)] transition-transform hover:scale-105 active:scale-95"
+        <Button
+          size="icon-lg"
+          className="size-10 shrink-0 rounded-full shadow-md shadow-primary/25"
           onClick={togglePlayback}
           aria-label={isPlaying ? "Pause audio" : "Play audio"}
-          title={isPlaying ? "Pause audio" : "Play audio"}
         >
-          {isPlaying ? "❚❚" : "▶"}
-        </button>
+          {isPlaying ? <Pause className="fill-current" /> : <Play className="fill-current" />}
+        </Button>
         <div className="min-w-0 flex-1">
           <input
             className="audio-seek block w-full cursor-pointer"
@@ -156,12 +169,17 @@ export function AudioMessage({ audioUrl, prompt, onRegenerate }: Props) {
             aria-label="Audio progress"
             style={{ "--audio-progress": `${progressPercent}%` } as React.CSSProperties}
           />
-          <span className="mt-1 block text-xs font-medium tabular-nums text-[#91a7c3]">
+          <span className="mt-1.5 block text-xs font-medium tabular-nums text-muted-foreground">
             {formatTime(currentTime)} / {durationKnown ? formatTime(duration) : "--:--"}
           </span>
         </div>
       </div>
-      {prompt ? <p className="m-0 border-t border-[#29405d] pt-2.5 text-base leading-snug">{prompt}</p> : null}
+
+      {prompt ? (
+        <p className="m-0 border-t border-border/60 pt-2.5 text-sm leading-relaxed text-muted-foreground">
+          {prompt}
+        </p>
+      ) : null}
     </div>
   );
 }
