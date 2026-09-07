@@ -1,29 +1,6 @@
-/**
- * Second, independent safety check for generated images.
- *
- * image-generation.ts already asks Pollinations to filter unsafe content
- * (the `safe=nsfw` query param), but that's a single third-party filter we
- * don't control. This module adds a separate check: the actual generated
- * image is sent to a vision-capable model on OpenRouter and asked to
- * classify it as safe/unsafe before it's ever served to the client.
- *
- * Configure which model runs the check with MODERATION_MODEL. Defaults to
- * "openrouter/free", OpenRouter's auto-router for free models that support
- * image understanding — no extra signup or key needed beyond the
- * OPENROUTER_API_KEY you already use for text/audio. For higher accuracy in
- * production, point MODERATION_MODEL at a specific vision model you trust
- * (e.g. a paid OpenRouter vision model).
- */
-
 export type ModerationResult = {
-  /** Whether the image is safe to show. Defaults to true when the check
-   *  could not be run at all (see `checked`) so a moderation outage never
-   *  silently blocks every image — Pollinations' own filter still applies. */
   safe: boolean;
   reason?: string;
-  /** False if the check itself failed to run (missing key, network error,
-   *  unparseable response, etc.) — distinguishes "checked and safe" from
-   *  "couldn't check, assumed safe". */
   checked: boolean;
 };
 

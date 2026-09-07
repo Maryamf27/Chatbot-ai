@@ -32,24 +32,12 @@ export async function handleImageGenerate({ messages, res, options }: ImageGener
 
   const imageConfig = await determineImageConfig(prompt, options);
   const candidates = [imageConfig.profile, ...imageConfig.fallbackProfiles];
-
-  // Every candidate URL already went through Pollinations' own `safe=nsfw`
-  // filter (see buildPollinationsUrl). On top of that, walk the candidates
-  // in order and run each one through an independent vision-model safety
-  // check (moderateImage) before it's allowed to reach the client — only
-  // the first candidate that passes both checks gets served.
   for (let i = 0; i < candidates.length; i += 1) {
     const profile = candidates[i];
     const candidateUrl = buildPollinationsUrl(imageConfig.enhancedPrompt, profile);
     const moderation = await moderateImage(candidateUrl);
 
     if (moderation.safe) {
-      // Any remaining candidates are only used client-side if this image
-      // fails to physically load (network hiccup, provider outage) — they
-      // still carry Pollinations' own filter, just not this second check,
-      // since re-running the vision check on every candidate up front
-      // would add latency/cost to the common case where the first image
-      // is fine.
       const remainingUrls = candidates
         .slice(i + 1)
         .map((remaining) => buildPollinationsUrl(imageConfig.enhancedPrompt, remaining));

@@ -1,6 +1,6 @@
 export type ChatRole = "user" | "assistant";
 
-export type ModelId = "text" | "flash" | "image";
+export type ModelId = "text" | "audio" | "image";
 
 export type MessageType = "text" | "image" | "audio";
 
