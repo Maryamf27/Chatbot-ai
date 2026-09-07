@@ -7,6 +7,7 @@ import {
   type ImageGenerationOptions,
 } from "./image-generation.js";
 import { moderateImage } from "./image-moderation.js";
+import { uploadGeneratedImage } from "./supabase.service.js";
 
 export type ImageGenerateArgs = {
   messages: ChatMessage[];
@@ -21,6 +22,38 @@ function extractPrompt(messages: ChatMessage[]): string {
     return extractPromptContent(message.content);
   }
   return "";
+}
+
+async function storeGeneratedImage(pollinationsUrl: string): Promise<{ url: string }> {
+  let response: globalThis.Response;
+
+  try {
+    response = await fetch(pollinationsUrl);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not fetch the generated image from Pollinations: ${message}`);
+  }
+
+  if (!response.ok) {
+    throw new Error(`Pollinations returned HTTP ${response.status} while generating the image.`);
+  }
+
+  let imageBuffer: Buffer;
+  try {
+    imageBuffer = Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not read the generated image from Pollinations: ${message}`);
+  }
+
+  const contentType = response.headers.get("content-type") ?? "image/png";
+
+  try {
+    return await uploadGeneratedImage(imageBuffer, contentType);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Could not upload the generated image to Supabase Storage: ${message}`);
+  }
 }
 
 export async function handleImageGenerate({ messages, res, options }: ImageGenerateArgs): Promise<void> {
@@ -38,20 +71,24 @@ export async function handleImageGenerate({ messages, res, options }: ImageGener
     const moderation = await moderateImage(candidateUrl);
 
     if (moderation.safe) {
-      const remainingUrls = candidates
-        .slice(i + 1)
-        .map((remaining) => buildPollinationsUrl(imageConfig.enhancedPrompt, remaining));
+      try {
+        const { url } = await storeGeneratedImage(candidateUrl);
 
-      res.json({
-        type: "image",
-        model: profile.model,
-        imageUrl: candidateUrl,
-        fallbackUrls: remainingUrls,
-        prompt,
-        width: profile.width,
-        height: profile.height,
-      });
-      return;
+        res.json({
+          type: "image",
+          model: profile.model,
+          imageUrl: url,
+          prompt,
+          width: profile.width,
+          height: profile.height,
+        });
+        return;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[image.service] failed to fetch or store generated image:", message);
+        res.status(502).json({ error: `Image generation failed: ${message}` });
+        return;
+      }
     }
 
     console.warn("[image.service] moderation blocked a candidate", {

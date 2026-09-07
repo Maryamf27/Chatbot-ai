@@ -1253,21 +1253,6 @@ export default function App() {
 
           {error ? <p className="m-0 text-sm text-[#f97068]">{error}</p> : null}
 
-          {busy && selectedModel === "image" ? (
-            <div
-              className="flex items-center gap-2 rounded-lg border border-[#315fce]/35 bg-[#132238] px-3 py-2 text-sm text-[#9cc4ff]"
-              role="status"
-              aria-live="polite"
-            >
-              <span className="inline-flex gap-1" aria-hidden="true">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:150ms]" />
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#7db4ff] [animation-delay:300ms]" />
-              </span>
-              Creating your image from the prompt…
-            </div>
-          ) : null}
-
           {isSpeaking ? (
             <button
               type="button"
