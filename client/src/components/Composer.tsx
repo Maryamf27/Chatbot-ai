@@ -58,7 +58,7 @@ export function Composer({
   return (
     <form
       className={cn(
-        "rounded-3xl border border-input bg-card/85 p-2 shadow-lg backdrop-blur-xl transition-colors",
+        "rounded-xl border border-input bg-card/85 p-2 shadow-md backdrop-blur-xl transition-colors",
         "focus-within:border-primary/50 focus-within:ring-3 focus-within:ring-ring/20",
         recording && "border-destructive/50 ring-3 ring-destructive/20",
       )}

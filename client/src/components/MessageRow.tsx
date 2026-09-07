@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Sparkles } from "lucide-react";
+import { Check, Compass, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "cn";
 import type { ChatMessage, MessageType } from "@/types";
@@ -22,10 +22,10 @@ export function TypingDots({ className }: { className?: string }) {
 function AssistantAvatar() {
   return (
     <div
-      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-chart-2 text-primary-foreground shadow-sm"
+      className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-primary"
       aria-hidden="true"
     >
-      <Sparkles className="size-4" />
+      <Compass className="size-4" strokeWidth={1.8} />
     </div>
   );
 }

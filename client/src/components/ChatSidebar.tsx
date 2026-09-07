@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import {
+  Compass,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
   Search,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -38,10 +38,10 @@ const statusStyles: Record<Props["statusTone"], string> = {
 function BrandMark() {
   return (
     <span
-      className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-chart-2 text-primary-foreground shadow-sm"
+      className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/35 bg-primary/12 text-primary"
       aria-hidden="true"
     >
-      <Sparkles className="size-4" />
+      <Compass className="size-4" strokeWidth={1.8} />
     </span>
   );
 }
@@ -128,7 +128,7 @@ export function ChatSidebar({
         <div className="flex items-center gap-2 px-3 pt-3.5 pb-2">
           <BrandMark />
           <div className="min-w-0 flex-1">
-            <p className="m-0 truncate text-sm font-semibold tracking-tight">AI Studio</p>
+            <p className="m-0 truncate font-heading text-[15px] font-semibold tracking-tight">AI Studio</p>
             <p className="m-0 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <span className={cn("size-1.5 rounded-full", statusStyles[statusTone])} aria-hidden="true" />
               {statusLabel}

@@ -1,4 +1,4 @@
-import { ArrowUpRight, Sparkles } from "lucide-react";
+import { ArrowUpRight, Compass } from "lucide-react";
 import type { AppModel } from "@/config/models";
 import type { ModelId } from "@/types";
 import { MODEL_ICONS } from "@/config/model-icons";
@@ -35,13 +35,13 @@ export function EmptyState({ model, onPick }: Props) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 text-center">
       <span
-        className="mb-5 flex size-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-chart-2 text-primary-foreground shadow-lg shadow-primary/20"
+        className="mb-5 flex size-14 items-center justify-center rounded-full border border-primary/40 bg-primary/10 text-primary"
         aria-hidden="true"
       >
-        <Sparkles className="size-7" />
+        <Compass className="size-6" strokeWidth={1.6} />
       </span>
 
-      <h2 className="m-0 text-2xl font-semibold tracking-tight text-balance sm:text-3xl">
+      <h2 className="m-0 font-heading text-3xl font-semibold tracking-tight text-balance sm:text-4xl">
         How can I help you today?
       </h2>
       <p className="mt-2 mb-0 flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -55,7 +55,7 @@ export function EmptyState({ model, onPick }: Props) {
             key={prompt}
             type="button"
             onClick={() => onPick(prompt)}
-            className="group flex items-start gap-2 rounded-xl border border-border/70 bg-card/50 px-3.5 py-3 text-left text-sm text-muted-foreground transition-all outline-none hover:border-primary/40 hover:bg-card hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
+            className="group flex items-start gap-2 rounded-lg border border-border/70 bg-card/40 px-3.5 py-3 text-left text-sm text-muted-foreground transition-all outline-none hover:-translate-y-0.5 hover:border-primary/45 hover:bg-card hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/40"
           >
             <span className="min-w-0 flex-1 leading-snug">{prompt}</span>
             <ArrowUpRight className="mt-0.5 size-4 shrink-0 text-muted-foreground/50 transition-colors group-hover:text-primary" />
