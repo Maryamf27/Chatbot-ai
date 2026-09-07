@@ -13,7 +13,7 @@
 [![Railway](https://img.shields.io/badge/Railway-0B0D0E?style=for-the-badge&logo=railway&logoColor=white)](https://railway.app/)
 [![OpenRouter](https://img.shields.io/badge/OpenRouter-6E56CF?style=for-the-badge&logoColor=white)](https://openrouter.ai/)
 
-[🚀 Live Demo](https://ai-chatbot-self-three-97.vercel.app) • [Features](#-features) • [Architecture](#-architecture) • [Setup](#-setup) • [Deployment](#-deployment)
+[🚀 Live Demo](https://chatbot-ai-ten-sooty.vercel.app) • [Features](#-features) • [Architecture](#-architecture) • [Setup](#-setup) • [Deployment](#-deployment)
 
 </div>
 
@@ -31,7 +31,7 @@
 
 The frontend is a **React + TypeScript** (Vite) client. The backend is an **Express + TypeScript** API that proxies all model calls, so API keys never reach the browser.
 
-**🔗 Live app:** [ai-chatbot-self-three-97.vercel.app](https://ai-chatbot-self-three-97.vercel.app)
+**🔗 Live app:** [https://chatbot-ai-ten-sooty.vercel.app](https://chatbot-ai-ten-sooty.vercel.app)
 
 ---
 
@@ -168,7 +168,7 @@ CLIENT_URL=https://your-vercel-app.vercel.app
 Current live config:
 
 ```env
-CLIENT_URL=https://ai-chatbot-self-three-97.vercel.app
+CLIENT_URL=https://chatbot-ai-ten-sooty.vercel.app
 ```
 
 > 💡 For multiple frontend domains, use a comma-separated `CORS_ORIGINS` value instead of `CLIENT_URL`.
@@ -192,7 +192,7 @@ VITE_API_URL=https://your-railway-service.up.railway.app
 
 | Layer | URL |
 |---|---|
-| Frontend (Vercel) | [ai-chatbot-self-three-97.vercel.app](https://ai-chatbot-self-three-97.vercel.app) |
+| Frontend (Vercel) | [https://chatbot-ai-ten-sooty.vercel.app](https://chatbot-ai-ten-sooty.vercel.app) |
 
 ---
 
