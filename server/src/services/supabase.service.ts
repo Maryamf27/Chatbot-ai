@@ -2,6 +2,7 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { randomUUID } from "node:crypto";
 
 const DEFAULT_BUCKET = "generated-images";
+const DEFAULT_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 365;
 
 type UploadCtx = {
   convoId?: string;
@@ -35,6 +36,13 @@ class SupabaseStorageService {
 
   private bucketName(): string {
     return process.env.SUPABASE_STORAGE_BUCKET ?? DEFAULT_BUCKET;
+  }
+
+  private signedUrlTtlSeconds(): number {
+    const configuredValue = Number(process.env.SUPABASE_SIGNED_URL_TTL_SECONDS);
+    return Number.isFinite(configuredValue) && configuredValue > 0
+      ? configuredValue
+      : DEFAULT_SIGNED_URL_TTL_SECONDS;
   }
 
   private requireClient(): SupabaseClient {
@@ -76,10 +84,16 @@ class SupabaseStorageService {
         throw new Error(uploadError.message || "Upload failed");
       }
 
-      const { data } = client.storage.from(bucket).getPublicUrl(fileName);
-      const url = data?.publicUrl;
+      const { data: signedUrlData, error: signedUrlError } = await client.storage
+        .from(bucket)
+        .createSignedUrl(fileName, this.signedUrlTtlSeconds());
+      if (signedUrlError) {
+        throw new Error(signedUrlError.message || "Could not create a URL for the uploaded image");
+      }
+
+      const url = signedUrlData?.signedUrl;
       if (!url) {
-        throw new Error("Could not obtain public URL after upload");
+        throw new Error("Could not obtain a signed URL after upload");
       }
       return { url };
     } catch (err) {
