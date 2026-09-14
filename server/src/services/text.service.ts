@@ -1,7 +1,7 @@
 import type { Response } from "express";
 import { llm, isApiKeyConfigured } from "../llm.js";
 import { getModelConfig } from "../config/models.js";
-import type { ChatMessage } from "../types.js";
+import type { ChatMessage, ModelId } from "../types.js";
 
 const SETUP_REPLY =
   "## 🔧 Setup Required\n\n" +
@@ -39,6 +39,7 @@ const SYSTEM_PROMPT =
 export type StreamChatArgs = {
   messages: ChatMessage[];
   res: Response;
+  modelId?: ModelId;
 };
 
 function sendChunk(res: Response, obj: unknown) {
@@ -46,13 +47,13 @@ function sendChunk(res: Response, obj: unknown) {
   res.write(JSON.stringify(obj) + "\n");
 }
 
-export async function streamTextChat({ messages, res }: StreamChatArgs): Promise<void> {
+export async function streamTextChat({ messages, res, modelId }: StreamChatArgs): Promise<void> {
   if (!isApiKeyConfigured()) {
     res.json({ reply: SETUP_REPLY });
     return;
   }
 
-  const modelCfg = getModelConfig("text");
+  const modelCfg = getModelConfig(modelId ?? "text");
 
   const chatMessages = messages.map((m) => ({
     role: m.role as "system" | "user" | "assistant",

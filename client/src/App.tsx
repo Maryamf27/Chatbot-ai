@@ -68,7 +68,8 @@ function validMessage(m: unknown): m is ChatMessage {
     msg.model === undefined ||
     msg.model === "text" ||
     msg.model === "audio" ||
-    msg.model === "image";
+    msg.model === "image" ||
+    msg.model === "kimi";
   const imageUrlOk =
     msg.imageUrl === undefined || typeof msg.imageUrl === "string";
   const imageFallbackUrlsOk =

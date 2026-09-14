@@ -24,6 +24,9 @@ export async function routeChat(model: unknown, req: Request, res: Response): Pr
     case "text":
       await streamTextChat({ messages, res });
       return;
+    case "kimi":
+      await streamTextChat({ messages, res, modelId: "kimi" });
+      return;
     case "audio":
       await handleFishAudioChat({ messages, res });
       return;

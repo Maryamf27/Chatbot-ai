@@ -27,6 +27,11 @@ export const AI_MODELS: Record<ModelId, AiModelConfig> = {
     model: process.env.IMAGE_MODEL || "flux",
     type: "image",
   },
+  kimi: {
+    provider: "openrouter",
+    model: process.env.KIMI_MODEL ?? "moonshotai/kimi-k3",
+    type: "text",
+  },
 };
 
 const SUPPORTED_IDS: ReadonlySet<string> = new Set(Object.keys(AI_MODELS));

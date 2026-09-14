@@ -22,6 +22,12 @@ const SUGGESTIONS: Record<ModelId, string[]> = {
     "Retro-futuristic city skyline at night, neon reflections",
     "Watercolour portrait of a fox wearing a wool scarf",
   ],
+  kimi: [
+    "Summarize this contract and flag any risky clauses",
+    "Walk through the trade-offs between microservices and a monolith",
+    "Debug why this recursive function overflows the stack",
+    "Draft a long-context project brief from these scattered notes",
+  ],
 };
 
 type Props = {

@@ -1,4 +1,4 @@
-export type ModelId = "text" | "audio" | "image";
+export type ModelId = "text" | "audio" | "image" | "kimi";
 
 export type ChatRole = "user" | "assistant" | "system";
 

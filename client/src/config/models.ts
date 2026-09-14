@@ -42,6 +42,15 @@ export const MODELS: AppModel[] = [
     placeholder: "Describe the image you want to create…",
     supportsAttachments: false,
   },
+  {
+    id: "kimi",
+    name: "Kimi AI",
+    kind: "Chat",
+    description: "Moonshot's Kimi model — strong reasoning and long-context understanding.",
+    type: "text",
+    placeholder: "Ask Kimi anything…",
+    supportsAttachments: true,
+  },
 ];
 
 export function getModelById(id: ModelId | string | null | undefined): AppModel {
